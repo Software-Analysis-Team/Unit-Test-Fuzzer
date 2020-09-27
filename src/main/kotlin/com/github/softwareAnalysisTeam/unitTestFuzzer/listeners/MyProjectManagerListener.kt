@@ -1,8 +1,8 @@
-package com.github.dmitrypogrebnoy.unittestfuzzer.listeners
+package com.github.softwareAnalysisTeam.unitTestFuzzer.listeners
 
+import com.github.softwareAnalysisTeam.unitTestFuzzer.services.MyProjectService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManagerListener
-import com.github.dmitrypogrebnoy.unittestfuzzer.services.MyProjectService
 
 internal class MyProjectManagerListener : ProjectManagerListener {
 

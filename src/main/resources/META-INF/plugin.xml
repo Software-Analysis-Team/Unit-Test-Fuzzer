@@ -1,19 +1,21 @@
 <idea-plugin>
-    <id>com.github.dmitrypogrebnoy.unittestfuzzer</id>
+    <id>com.github.softwareAnalysisTeam.unitTestFuzzer</id>
     <name>Unit-Test-Fuzzer</name>
-    <vendor>dmitrypogrebnoy</vendor>
+    <vendor>Software-Analysis-Team</vendor>
 
     <!-- Product and plugin compatibility requirements -->
     <!-- https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceImplementation="com.github.dmitrypogrebnoy.unittestfuzzer.services.MyApplicationService"/>
-        <projectService serviceImplementation="com.github.dmitrypogrebnoy.unittestfuzzer.services.MyProjectService"/>
+        <applicationService
+                serviceImplementation="com.github.softwareAnalysisTeam.unitTestFuzzer.services.MyApplicationService"/>
+        <projectService
+                serviceImplementation="com.github.softwareAnalysisTeam.unitTestFuzzer.services.MyProjectService"/>
     </extensions>
 
     <projectListeners>
-        <listener class="com.github.dmitrypogrebnoy.unittestfuzzer.listeners.MyProjectManagerListener"
+        <listener class="com.github.softwareAnalysisTeam.unitTestFuzzer.listeners.MyProjectManagerListener"
                   topic="com.intellij.openapi.project.ProjectManagerListener"/>
     </projectListeners>
 </idea-plugin>

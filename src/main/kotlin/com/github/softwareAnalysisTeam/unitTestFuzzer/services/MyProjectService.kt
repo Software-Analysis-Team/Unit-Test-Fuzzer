@@ -1,7 +1,7 @@
-package com.github.dmitrypogrebnoy.unittestfuzzer.services
+package com.github.softwareAnalysisTeam.unitTestFuzzer.services
 
+import com.github.softwareAnalysisTeam.unitTestFuzzer.MyBundle
 import com.intellij.openapi.project.Project
-import com.github.dmitrypogrebnoy.unittestfuzzer.MyBundle
 
 class MyProjectService(project: Project) {
 
