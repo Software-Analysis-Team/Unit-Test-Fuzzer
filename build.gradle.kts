@@ -36,6 +36,7 @@ repositories {
 }
 dependencies {
     implementation(files("libs/randoop-4.2.4.jar"))
+    implementation(files("libs/myRandoop-all-4.2.4.jar"))
 }
 
 // Configure gradle-intellij-plugin plugin.
