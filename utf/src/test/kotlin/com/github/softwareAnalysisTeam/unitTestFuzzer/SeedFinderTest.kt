@@ -7,9 +7,9 @@ import org.spekframework.spek2.style.specification.describe
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-object ValueModifierTest : Spek({
-    val valueModifier = ValueModifier()
-
+object SeedFinderTest : Spek({
+    val seedFinder = SeedFinder()
+    val className = "MyInteger"
 
     describe("calling visit() to test collection of values from constructor") {
         describe("with cast") {
@@ -21,7 +21,7 @@ object ValueModifierTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
             it("should collect value 13") {
                 assertEquals("13", seeds[0].toString())
@@ -50,7 +50,7 @@ object ValueModifierTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
             it("should collect value -23") {
                 assertEquals("-23", seeds[0].toString())
@@ -80,9 +80,9 @@ object ValueModifierTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
-            it("should collect value false and hi") {
+            it("should collect values false and hi") {
                 assertEquals("false", seeds[0].toString())
                 assertEquals("\"hi\"", seeds[1].toString())
             }
@@ -112,9 +112,9 @@ object ValueModifierTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
-            it("should collect value true and hi") {
+            it("should collect values true and hi") {
                 assertEquals("true", seeds[0].toString())
                 assertEquals("\"hi!\"", seeds[1].toString())
             }
@@ -143,7 +143,7 @@ object ValueModifierTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
             it("should collect value null") {
                 assertEquals("null", seeds[0].toString())
@@ -176,13 +176,13 @@ object ValueModifierTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = valueModifier.visit(cu)
+            val seeds = seedFinder.getSeeds(className, cu)
 
             it("should collect nothing") {
                 assertTrue(seeds.isEmpty())
             }
 
-            it("should changes nothing") {
+            it("should replace nothing") {
                 assertEquals(
                     "public class Test5 {\n" +
                             "\n" +
