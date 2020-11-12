@@ -6,10 +6,10 @@ import com.github.javaparser.ast.Node
 
 class JunitParser {
 
-    fun parse(classSource: String): Pair<CompilationUnit, List<Node>> {
+    fun parse(testingClassName: String, classSource: String): Pair<CompilationUnit, List<Node>> {
         val cu: CompilationUnit = StaticJavaParser.parse(classSource)
-        val modifier = ValueModifier()
-        val seeds = modifier.visit(cu)
+        val seedFinder = SeedFinder()
+        val seeds = seedFinder.getSeeds(testingClassName, cu)
 
         return Pair(cu, seeds)
     }
