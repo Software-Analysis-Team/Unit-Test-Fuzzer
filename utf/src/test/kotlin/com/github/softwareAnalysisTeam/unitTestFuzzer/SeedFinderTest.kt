@@ -200,6 +200,85 @@ object SeedFinderTest : Spek({
     }
 
     describe("calling on the real generated test cases") {
-        // todo
+
+        describe("Evosuite test") {
+            val testClass = "public class MyInteger_ESTest extends MyInteger_ESTest_scaffolding {\n" +
+                    "\n" +
+                    "    @Test(timeout = 4000)\n" +
+                    "    public void test3() throws Throwable {\n" +
+                    "        MyInteger myInteger0 = new MyInteger(650);\n" +
+                    "        MyInteger myInteger1 = myInteger0.add(myInteger0);\n" +
+                    "        assertEquals(1300, myInteger1.getIntValue());\n" +
+                    "        assertEquals(650, myInteger0.getIntValue());\n" +
+                    "    }\n" +
+                    "}\n"
+
+            val cu: CompilationUnit = StaticJavaParser.parse(testClass)
+            val seeds = seedFinder.getSeeds(className, cu)
+
+            it("should collect 650") {
+                assertEquals("650", seeds[0].toString())
+            }
+
+            it("should replace only 650 with ###") {
+                assertEquals(
+                    "public class MyInteger_ESTest extends MyInteger_ESTest_scaffolding {\n" +
+                            "\n" +
+                            "    @Test(timeout = 4000)\n" +
+                            "    public void test3() throws Throwable {\n" +
+                            "        MyInteger myInteger0 = new MyInteger(\"###\");\n" +
+                            "        MyInteger myInteger1 = myInteger0.add(myInteger0);\n" +
+                            "        assertEquals(1300, myInteger1.getIntValue());\n" +
+                            "        assertEquals(650, myInteger0.getIntValue());\n" +
+                            "    }\n" +
+                            "}\n",
+                    cu.toString()
+                )
+            }
+        }
+
+        describe("Randoop test") {
+            val testClass = "@FixMethodOrder(MethodSorters.NAME_ASCENDING)\n" +
+                    "public class RegressionTest0 {\n" +
+                    "\n" +
+                    "    @Test\n" +
+                    "    public void test002() throws Throwable {\n" +
+                    "        if (debug)\n" +
+                    "            System.out.format(\"%n%s%n\", \"RegressionTest0.test002\");\n" +
+                    "        MyInteger myInteger1 = new MyInteger(0);\n" +
+                    "        int int2 = myInteger1.getIntValue();\n" +
+                    "        java.lang.Class<?> wildcardClass3 = myInteger1.getClass();\n" +
+                    "        org.junit.Assert.assertTrue(\"'\" + int2 + \"' != '\" + 0 + \"'\", int2 == 0);\n" +
+                    "        org.junit.Assert.assertNotNull(wildcardClass3);\n" +
+                    "    }\n" +
+                    "}\n"
+
+            val cu: CompilationUnit = StaticJavaParser.parse(testClass)
+            val seeds = seedFinder.getSeeds(className, cu)
+
+            it("should collect 0") {
+                assertEquals("0", seeds[0].toString())
+            }
+
+            it("should replace only 0 with ###") {
+                assertEquals(
+                    "@FixMethodOrder(MethodSorters.NAME_ASCENDING)\n" +
+                            "public class RegressionTest0 {\n" +
+                            "\n" +
+                            "    @Test\n" +
+                            "    public void test002() throws Throwable {\n" +
+                            "        if (debug)\n" +
+                            "            System.out.format(\"%n%s%n\", \"RegressionTest0.test002\");\n" +
+                            "        MyInteger myInteger1 = new MyInteger(\"###\");\n" +
+                            "        int int2 = myInteger1.getIntValue();\n" +
+                            "        java.lang.Class<?> wildcardClass3 = myInteger1.getClass();\n" +
+                            "        org.junit.Assert.assertTrue(\"'\" + int2 + \"' != '\" + 0 + \"'\", int2 == 0);\n" +
+                            "        org.junit.Assert.assertNotNull(wildcardClass3);\n" +
+                            "    }\n" +
+                            "}\n",
+                    cu.toString()
+                )
+            }
+        }
     }
 })
