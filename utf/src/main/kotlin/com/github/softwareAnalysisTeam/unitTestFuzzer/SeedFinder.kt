@@ -20,8 +20,10 @@ class SeedFinder {
                         varDecl.initializer.ifPresent { initializer ->
 
                             initializer.ifObjectCreationExpr { objCreationExpr ->
-                                objCreationExpr.arguments.forEach { argOfConstructor ->
-                                    collectAndReplace(argOfConstructor, seeds)
+                                if (objCreationExpr.toString().contains(testingClassName)) {
+                                    objCreationExpr.arguments.forEach { argOfConstructor ->
+                                        collectAndReplace(argOfConstructor, seeds)
+                                    }
                                 }
                             }
                             // do we need it?

@@ -75,7 +75,7 @@ object SeedFinderTest : Spek({
                     "\n" +
                     "    @Test\n" +
                     "    public void test() throws Throwable {\n" +
-                    "        String str = new Object(false, \"hi\");\n" +
+                    "        String str = new MyInteger(false, \"hi\");\n" +
                     "    }\n " +
                     "}\n"
 
@@ -93,13 +93,45 @@ object SeedFinderTest : Spek({
                             "\n" +
                             "    @Test\n" +
                             "    public void test() throws Throwable {\n" +
-                            "        String str = new Object(\"###\", \"###\");\n" +
+                            "        String str = new MyInteger(\"###\", \"###\");\n" +
                             "    }\n" +
                             "}\n",
                     cu.toString()
                 )
             }
         }
+
+        describe("calling constructor that is not our CUT") {
+            val testClass = "public class Test2 {\n" +
+                    "\n" +
+                    "    @Test\n" +
+                    "    public void test() throws Throwable {\n" +
+                    "        String str = new Object(13);\n" +
+                    "    }\n " +
+                    "}\n"
+
+            val cu: CompilationUnit = StaticJavaParser.parse(testClass)
+            val seeds = seedFinder.getSeeds(className, cu)
+
+            it("should collect nothing") {
+                assertTrue(seeds.isEmpty())
+            }
+
+            it("should replace nothing") {
+                assertEquals(
+                    "public class Test2 {\n" +
+                            "\n" +
+                            "    @Test\n" +
+                            "    public void test() throws Throwable {\n" +
+                            "        String str = new Object(13);\n" +
+                            "    }\n" +
+                            "}\n",
+                    cu.toString()
+                )
+            }
+        }
+
+
     }
 
     describe("calling visit() to test collection of values from method args") {
