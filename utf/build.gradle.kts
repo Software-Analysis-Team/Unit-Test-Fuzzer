@@ -19,6 +19,8 @@ dependencies {
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
     implementation("com.github.javaparser:javaparser-core:3.15.0")
+    implementation("org.slf4j:slf4j-simple:1.7.29")
+    implementation("io.github.microutils:kotlin-logging:1.12.0")
 
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
