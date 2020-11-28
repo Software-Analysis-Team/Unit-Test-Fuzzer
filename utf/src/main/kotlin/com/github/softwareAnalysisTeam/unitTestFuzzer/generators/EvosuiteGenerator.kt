@@ -8,20 +8,16 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class RandoopGenerator(
-    private val javaHome: String,
-    private val randoopJarLocation: String
-) : TestGenerator {
+class EvosuiteGenerator(private val javaHome: String, private val evoSuiteJarLocation: String) : TestGenerator {
 
     override fun getTests(testClassName: String, projectCP: String): List<String> {
         val tests: MutableList<String> = mutableListOf()
-        val generatedTestsDir = Files.createDirectory(Paths.get(projectCP, "generatedTests"))
+
         val defaultCommand: String =
-            javaHome + File.separator + "bin" + File.separator + "java" + " " + "-classpath" + " " + projectCP + File.pathSeparator + randoopJarLocation + " " + "randoop.main.Main gentests" +
-                    " " + "--testclass=" + testClassName + " " + "--time-limit=5"
+            javaHome + File.separator + "bin" + File.separator + "java" + " -jar " + evoSuiteJarLocation + " " + "-class" + " " + testClassName + " " + "-projectCP" + " " + projectCP
 
-        JarExecutor.execute(defaultCommand, generatedTestsDir.toString())
-
+        JarExecutor.execute(defaultCommand, projectCP)
+        val generatedTestsDir = Paths.get(projectCP, "evosuite-tests")
         Files.walk(generatedTestsDir).forEach {
             if (it.isFile()) {
                 tests.add(it.toFile().readText())

@@ -22,19 +22,20 @@ class JarExecutor {
 
                 if (exitValue != 0) {
                     logger.error("External jar execution failed. Error info:")
-                    val errorStream = process.inputStream
+                    val errorStream = process.errorStream
                     val errorInfo = BufferedReader(InputStreamReader(errorStream)).lines()
                         .parallel().collect(Collectors.joining("\n"))
                     logger.error(errorInfo)
                 } else {
-                    logger.debug("External jar execution finished successfully. Execution info:")
-                    val stream = process.inputStream
-                    val info = BufferedReader(InputStreamReader(stream)).lines()
-                        .parallel().collect(Collectors.joining("\n"))
-                    logger.debug(info)
+                    logger.debug("External jar execution finished successfully.")
                 }
+                logger.debug(" Execution info:")
+                val stream = process.inputStream
+                val info = BufferedReader(InputStreamReader(stream)).lines()
+                    .parallel().collect(Collectors.joining("\n"))
+                logger.debug(info)
             } catch (e: Exception) {
-                logger.error(e.message)
+                logger.error(e.stackTraceToString())
             }
         }
     }
