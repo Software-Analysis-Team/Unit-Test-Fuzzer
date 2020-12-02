@@ -1,6 +1,6 @@
 package com.github.softwareAnalysisTeam.unitTestFuzzer.generators
 
-import com.github.softwareAnalysisTeam.unitTestFuzzer.JarExecutor
+import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
 import com.intellij.util.io.delete
 import com.intellij.util.io.isFile
@@ -16,7 +16,7 @@ class EvosuiteGenerator(private val javaHome: String, private val evoSuiteJarLoc
         val defaultCommand: String =
             javaHome + File.separator + "bin" + File.separator + "java" + " -jar " + evoSuiteJarLocation + " " + "-class" + " " + testClassName + " " + "-projectCP" + " " + projectCP
 
-        JarExecutor.execute(defaultCommand, projectCP)
+        CommandExecutor.execute(defaultCommand, projectCP)
         val generatedTestsDir = Paths.get(projectCP, "evosuite-tests")
         Files.walk(generatedTestsDir).forEach {
             if (it.isFile()) {

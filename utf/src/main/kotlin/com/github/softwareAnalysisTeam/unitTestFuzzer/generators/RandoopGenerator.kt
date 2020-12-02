@@ -1,6 +1,6 @@
 package com.github.softwareAnalysisTeam.unitTestFuzzer.generators
 
-import com.github.softwareAnalysisTeam.unitTestFuzzer.JarExecutor
+import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
 import com.intellij.util.io.delete
 import com.intellij.util.io.isFile
@@ -20,7 +20,7 @@ class RandoopGenerator(
             javaHome + File.separator + "bin" + File.separator + "java" + " " + "-classpath" + " " + projectCP + File.pathSeparator + randoopJarLocation + " " + "randoop.main.Main gentests" +
                     " " + "--testclass=" + testClassName + " " + "--time-limit=5"
 
-        JarExecutor.execute(defaultCommand, generatedTestsDir.toString())
+        CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 
         Files.walk(generatedTestsDir).forEach {
             if (it.isFile()) {

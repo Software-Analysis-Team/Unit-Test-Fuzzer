@@ -6,10 +6,10 @@ import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.expr.*
 import com.github.javaparser.ast.stmt.ExpressionStmt
 
-class SeedFinder {
+internal class SeedFinder {
 
-    fun getSeeds(testingClassName: String, cu: CompilationUnit): List<Node> {
-        val seeds = mutableListOf<Node>()
+    fun getSeeds(testingClassName: String, cu: CompilationUnit): List<Expression> {
+        val seeds = mutableListOf<Expression>()
 
         cu.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
             testMethodDeclaration.walk(ExpressionStmt::class.java) { exprStmt ->
@@ -46,7 +46,7 @@ class SeedFinder {
         testingClassName: String,
         methodDeclaration: MethodDeclaration,
         methodCallExpr: MethodCallExpr,
-        seeds: MutableList<Node>
+        seeds: MutableList<Expression>
     ) {
         val methodCallExprString = methodCallExpr.toString()
 
@@ -60,7 +60,7 @@ class SeedFinder {
     }
 
 
-    private fun findValueInArgument(node: Node): Node {
+    private fun findValuesInArgument(node: Node): Node {
         val nodes = node.childNodes
 
         if (nodes.isNotEmpty()) {
@@ -68,16 +68,16 @@ class SeedFinder {
             if (curExpr.isUnaryExpr && (curExpr.asUnaryExpr().operator == UnaryExpr.Operator.MINUS)) {
                 return node
             }
-            return findValueInArgument(nodes.last() as Node)
+            return findValuesInArgument(nodes.last() as Node)
         }
 
         return node
     }
 
-    private fun collectAndReplace(node: Node, seeds: MutableList<Node>) {
-        findValueInArgument(node).also {
+    private fun collectAndReplace(node: Node, seeds: MutableList<Expression>) {
+        findValuesInArgument(node).also {
             if (node !is NameExpr) {
-                seeds.add(it)
+                seeds.add(it as Expression)
                 it.replace(StringLiteralExpr("###"))
             }
         }
