@@ -1,12 +1,29 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "1.4.10"
+    kotlin("jvm") version "1.4.20"
     id("org.jetbrains.intellij") version "0.4.22"
 }
 
-group = "me.femilame"
-version = "1.0-SNAPSHOT"
+val projectGroup: String by project
+val projectVersion: String by project
+val platformVersion: String by project
+val platformDownloadSources: String by project
+val kotlinVersion: String by project
+val spekVersion: String by project
+
+group = projectGroup
+version = projectVersion
+
+intellij {
+    version = platformVersion
+    downloadSources = platformDownloadSources.toBoolean()
+    updateSinceUntilBuild = true
+}
+
+configurations.implementation {
+    exclude(group = "com.jetbrains", module = "ideaIC")
+}
 
 repositories {
     mavenCentral()
@@ -14,14 +31,12 @@ repositories {
 }
 
 dependencies {
-    val kotlinVersion = "1.4.10"
-    val spekVersion = "2.0.13"
-
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
     implementation("com.github.javaparser:javaparser-core:3.15.0")
     implementation("org.slf4j:slf4j-simple:1.7.29")
     implementation("io.github.microutils:kotlin-logging:1.12.0")
 
+    testImplementation(kotlin("test"))
     testImplementation("org.spekframework.spek2:spek-dsl-jvm:$spekVersion")
     testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:$spekVersion")
     testRuntimeOnly("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
@@ -33,6 +48,7 @@ tasks {
     }
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
+
