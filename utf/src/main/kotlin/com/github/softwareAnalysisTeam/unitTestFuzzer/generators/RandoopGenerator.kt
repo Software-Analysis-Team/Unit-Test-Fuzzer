@@ -2,8 +2,6 @@ package com.github.softwareAnalysisTeam.unitTestFuzzer.generators
 
 import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
-import com.intellij.util.io.delete
-import com.intellij.util.io.isFile
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -23,11 +21,11 @@ class RandoopGenerator(
         CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 
         Files.walk(generatedTestsDir).forEach {
-            if (it.isFile()) {
+            if (Files.isRegularFile(it)) {
                 tests.add(it.toFile().readText())
             }
         }
-        generatedTestsDir.delete()
+        generatedTestsDir.toFile().deleteRecursively()
 
         return tests
     }
