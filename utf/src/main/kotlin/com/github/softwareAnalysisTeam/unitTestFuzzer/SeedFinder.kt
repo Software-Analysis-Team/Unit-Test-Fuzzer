@@ -22,7 +22,7 @@ internal class SeedFinder {
                             initializer.ifObjectCreationExpr { objCreationExpr ->
                                 if (objCreationExpr.toString().contains(testingClassName)) {
                                     objCreationExpr.arguments.forEach { argOfConstructor ->
-                                        collectAndReplace(argOfConstructor, seeds)
+                                        collect(argOfConstructor, seeds)
                                     }
                                 }
                             }
@@ -54,7 +54,7 @@ internal class SeedFinder {
             findImplicitArgTypeName(methodDeclaration, methodCallExprString) == testingClassName
         ) {
             methodCallExpr.arguments.forEach { argOfMethod ->
-                collectAndReplace(argOfMethod, seeds)
+                collect(argOfMethod, seeds)
             }
         }
     }
@@ -65,20 +65,43 @@ internal class SeedFinder {
 
         if (nodes.isNotEmpty()) {
             val curExpr = node as Expression
+
+            // unbox digits from UnaryExpr
+            // suppose, we have only unary minus as operator
             if (curExpr.isUnaryExpr && (curExpr.asUnaryExpr().operator == UnaryExpr.Operator.MINUS)) {
+                if (curExpr.childNodes.size == 1) {
+                    return when (val boxedValue = curExpr.childNodes[0]) {
+                        is IntegerLiteralExpr -> {
+                            val unboxedIntExpr = IntegerLiteralExpr().setInt(-boxedValue.asInt())
+                            node.replace(unboxedIntExpr)
+                            unboxedIntExpr
+                        }
+                        is LongLiteralExpr -> {
+                            val unboxedLongExpr = LongLiteralExpr().setLong(-boxedValue.asLong())
+                            node.replace(unboxedLongExpr)
+                            unboxedLongExpr
+                        }
+                        is DoubleLiteralExpr -> {
+                            val unboxedLongExpr = DoubleLiteralExpr().setDouble(-boxedValue.asDouble())
+                            node.replace(unboxedLongExpr)
+                            unboxedLongExpr
+                        }
+                        else -> throw Exception("Used non-digital value with unary minus")
+                    }
+                }
                 return node
             }
+
             return findValuesInArgument(nodes.last() as Node)
         }
 
         return node
     }
 
-    private fun collectAndReplace(node: Node, seeds: MutableList<Expression>) {
+    private fun collect(node: Node, seeds: MutableList<Expression>) {
         findValuesInArgument(node).also {
             if (node !is NameExpr) {
                 seeds.add(it as Expression)
-                it.replace(StringLiteralExpr("###"))
             }
         }
     }
