@@ -49,10 +49,9 @@ class CommandExecutor {
                         .parallel().collect(Collectors.joining("\n"))
                     logger.debug(info)
                 }
-
-                process.destroy()
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
+            } finally {
                 process?.destroy()
             }
         }
