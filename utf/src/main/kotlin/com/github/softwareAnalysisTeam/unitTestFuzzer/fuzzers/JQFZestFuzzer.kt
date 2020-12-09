@@ -13,27 +13,30 @@ import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.Fuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.SeedFinder
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestCreator.Companion.collectAndDeleteAsserts
+import com.github.softwareAnalysisTeam.unitTestFuzzer.logger
 import java.io.File
-import java.io.FileReader
 import java.nio.file.Paths
 
 class JQFZestFuzzer : Fuzzer {
     private val commandToCompile: String
     private val commandToRun: String
-    private var classPaths: String
+    private val commandToRepr: String
+    private var paths: String
     private val projectDir = Paths.get("").toAbsolutePath().toString()
+    private val resourcesDir = Paths.get(projectDir, "src", "main", "resources").toString()
     private val generatedValuesFileName = "JQFGeneratedValues"
 
     init {
         val fileForPaths = File(projectDir + File.separator + "JQFPaths")
         fileForPaths.createNewFile()
         CommandExecutor.execute("libs/jqf/scripts/classpath.sh", projectDir, fileForPaths)
-        classPaths =
-            fileForPaths.readText() + ":" + Paths.get("libs/javaparser-core-3.15.0.jar").toAbsolutePath().toString()
+        paths =
+            ".:" + fileForPaths.readText() + ":" + Paths.get("libs/javaparser-core-3.15.0.jar").toAbsolutePath().toString()
         fileForPaths.delete()
 
-        commandToCompile = "javac -cp .:$classPaths"
-        commandToRun = "timeout 10s ${Paths.get(projectDir, "libs/jqf/bin/jqf-zest")} -c .:$classPaths"
+        commandToCompile = "javac -cp $paths"
+        commandToRun = "timeout 10s ${Paths.get(projectDir, "libs/jqf/bin/jqf-zest")} -c $paths"
+        commandToRepr = "${Paths.get(projectDir, "libs/jqf/bin/jqf-repro")} -c $paths"
     }
 
     override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): List<List<String>> {
@@ -43,9 +46,8 @@ class JQFZestFuzzer : Fuzzer {
 
         // assume our testing class is in resourceDir
         // todo: fix it
-        val resourcesDir = Paths.get(projectDir, "src", "main", "resources").toString()
         val className = "ClassToFuzz"
-        val methodName = "MethodToFuzz"
+        val methodName = "methodToFuzz"
 
         val fileToFuzz = File(resourcesDir + File.separator + "$className.java")
         fileToFuzz.createNewFile()
@@ -53,63 +55,51 @@ class JQFZestFuzzer : Fuzzer {
         val fuzzingTest = cu.clone()
         collectAndDeleteAsserts(fuzzingTest)
 
-        val fuzzingSeed = SeedFinder.getSeeds(testingClassName, fuzzingTest)
-        //prepareTestForFuzzing(fuzzingTest, fuzzingSeed)
+        val fileWithGeneratedValues = File(resourcesDir + File.separator + generatedValuesFileName)
+        fileWithGeneratedValues.createNewFile()
 
-        fileToFuzz.writeText(constructClassToFuzz(fuzzingTest, fuzzingSeed).toString())
+        val fuzzingSeed = SeedFinder.getSeeds(testingClassName, fuzzingTest)
+        fileToFuzz.writeText(constructClassToFuzz(fuzzingTest, fuzzingSeed, className, methodName).toString())
 
         CommandExecutor.execute("$commandToCompile ${fileToFuzz.name} $testingClassName.java", resourcesDir)
         CommandExecutor.execute("$commandToRun $className $methodName", resourcesDir)
+        // todo: iterate over all corpus/failures
+        //CommandExecutor.execute("$commandToRepr $className $methodName fuzz-results/failures/id_000000", resourcesDir)
 
-        val listOfValueLists = mutableListOf<List<String>>()
-        val fileWithGeneratedValues = File(resourcesDir + File.separator + generatedValuesFileName)
-        fileWithGeneratedValues.createNewFile()
-        val fileReader = FileReader(fileWithGeneratedValues)
 
-        val lines = fileReader.readLines()
-        for (i in lines.indices step seeds.size) {
-            val valueList = mutableListOf<String>()
-            for (j in i until i + seeds.size) {
-                valueList.add(lines[j])
-            }
-            listOfValueLists.add(valueList)
-        }
-
-        fileReader.close()
         fileWithGeneratedValues.delete()
-        // fileToFuzz.delete()
+        fileToFuzz.delete()
         File(resourcesDir + File.separator + "$className.class").delete()
-        File(resourcesDir + File.separator + "$testingClassName.class").delete()
-
-        return listOfValueLists
+        return mutableListOf<List<String>>()
     }
 
-    private fun constructClassToFuzz(cu: CompilationUnit, seeds: List<Expression>): CompilationUnit {
+    private fun constructClassToFuzz(cu: CompilationUnit, seeds: List<Expression>, className: String, methodName: String): CompilationUnit {
         val fileToFuzz = CompilationUnit()
 
         addImports(fileToFuzz)
 
-        val classToFuzz = fileToFuzz.addClass("ClassToFuzz", Modifier.Keyword.PUBLIC)
+        val classToFuzz = fileToFuzz.addClass("$className", Modifier.Keyword.PUBLIC)
         val classAnnotation = SingleMemberAnnotationExpr().setMemberValue(NameExpr("JQF.class")).setName("RunWith")
         classToFuzz.addAnnotation(classAnnotation)
 
-        val methodToFuzz = classToFuzz.addMethod("MethodToFuzz", Modifier.Keyword.PUBLIC)
+        val methodToFuzz = classToFuzz.addMethod("$methodName", Modifier.Keyword.PUBLIC)
+        methodToFuzz.addThrownException(Exception::class.java)
         val methodAnnotation = MarkerAnnotationExpr().setName("Fuzz")
         methodToFuzz.addAnnotation(methodAnnotation)
 
         for (i in seeds.indices) {
             methodToFuzz.addParameter(Parameter(seeds[i].getType(), "methodToFuzzArgument$i"))
-            seeds[i].parentNode.get().replace(seeds[i], StringLiteralExpr("methodToFuzzArgument$i"))
+            seeds[i].parentNode.get().replace(seeds[i], NameExpr("methodToFuzzArgument$i"))
         }
 
-        var methodsBody = mutableListOf<String>()
+        val methodsBodies = mutableListOf<String>()
         cu.walk(MethodDeclaration::class.java) {
             if (it.body.isPresent) {
-                 methodsBody.add("${it.body.get()}\n")
+                 methodsBodies.add("${it.body.get()}\n")
             }
         }
 
-        val methodBody = constructBodyForMethodToFuzz(cu.toString(), methodToFuzz)
+        val methodBody = constructBodyForMethodToFuzz(methodsBodies, methodToFuzz)
         methodToFuzz.setBody(methodBody)
 
         return fileToFuzz
@@ -124,46 +114,20 @@ class JQFZestFuzzer : Fuzzer {
             addImport("com.pholser.junit.quickcheck.*")
             addImport("com.pholser.junit.quickcheck.generator.*")
             addImport("edu.berkeley.cs.jqf.fuzz.*")
-
-            addImport("com.github.javaparser.ast.expr.*")
-            addImport("com.github.javaparser.ast.CompilationUnit")
-            addImport("com.github.javaparser.StaticJavaParser")
-
-            addImport("java.nio.charset.StandardCharsets")
-            addImport("java.nio.file.Files")
-            addImport("java.nio.file.Paths")
         }
     }
 
-    private fun constructBodyForMethodToFuzz(test: String, methodToFuzz: MethodDeclaration): BlockStmt {
-        val tryStmt = TryStmt()
-        val blockStmt = BlockStmt()
+    private fun constructBodyForMethodToFuzz(methodsBodies: List<String>, methodToFuzz: MethodDeclaration): BlockStmt {
+        val bodyStmt = BlockStmt()
 
-        blockStmt.addStatement(test)
+        // todo: ad as preprocessing step
+        bodyStmt.addStatement("Boolean debug = false;")
 
-        blockStmt.addStatement("File file = new File(\"$generatedValuesFileName\");")
-        blockStmt.addStatement("FileWriter writer = new FileWriter(file, true);")
-        for (parameter in methodToFuzz.parameters) {
-            blockStmt.addStatement("writer.write(${parameter.name} + \"\\n\");")
+        for (methodBody in methodsBodies) {
+            bodyStmt.addStatement(methodBody)
         }
-        blockStmt.addStatement("writer.close();")
 
-        tryStmt.tryBlock = blockStmt
-
-        val catchClause = CatchClause().setParameter(Parameter(ClassOrInterfaceType("Exception"), "e"))
-        val catchStmt = BlockStmt()
-
-        // adding statements in catch block
-        catchStmt.addStatement(StaticJavaParser.parseStatement("e.getStackTrace();"))
-        catchClause.body = catchStmt
-
-        val sts: NodeList<CatchClause> = NodeList()
-        sts.add(catchClause)
-        tryStmt.catchClauses = sts
-        val bodyStmts = NodeList<Statement>()
-        bodyStmts.add(tryStmt)
-
-        return BlockStmt(bodyStmts)
+        return bodyStmt
     }
 
     private fun Expression.getType(): Type {
