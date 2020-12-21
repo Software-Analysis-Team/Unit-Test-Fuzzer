@@ -24,6 +24,5 @@ fun main(args: Array<String>) {
     val test = parsed.first
     val seeds = parsed.second
     val values = JQFZestFuzzer().getValues(className, test, seeds)
-
-    TestCreator.createTest(test, seeds, values[0])
+    //TestCreator.createTest(test, seeds, values[0])
 }

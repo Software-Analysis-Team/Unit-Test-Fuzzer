@@ -11,7 +11,7 @@ class JunitParser {
             val cu: CompilationUnit = StaticJavaParser.parse(classSource)
             val seeds = SeedFinder.getSeeds(testingClassName, cu)
 
-            return Pair(cu, seeds)
+            return Pair(cu, seeds.first)
         }
     }
 }
