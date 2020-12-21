@@ -8,10 +8,12 @@ import com.github.javaparser.ast.stmt.ExpressionStmt
 
 internal class SeedFinder {
     companion object {
-        fun getSeeds(testingClassName: String, cu: CompilationUnit): List<Expression> {
+        fun getSeeds(testingClassName: String, cu: CompilationUnit): Pair<List<Expression>, Map<String, List<Expression>>> {
             val seeds = mutableListOf<Expression>()
+            val map = mutableMapOf<String, MutableList<Expression>>()
 
             cu.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
+                map[testMethodDeclaration.nameAsString] = mutableListOf()
                 testMethodDeclaration.walk(ExpressionStmt::class.java) { exprStmt ->
                     val expr = exprStmt.expression
 
@@ -22,31 +24,32 @@ internal class SeedFinder {
                                 initializer.ifObjectCreationExpr { objCreationExpr ->
                                     if (objCreationExpr.toString().contains(testingClassName)) {
                                         objCreationExpr.arguments.forEach { argOfConstructor ->
-                                            collect(argOfConstructor, seeds)
+                                            collect(argOfConstructor, testMethodDeclaration, seeds, map)
                                         }
                                     }
                                 }
                                 // do we need it?
                                 initializer.ifMethodCallExpr { methodCallExpr ->
-                                    findValuesInMethod(testingClassName, testMethodDeclaration, methodCallExpr, seeds)
+                                    findAndCollectValuesInMethod(testingClassName, testMethodDeclaration, methodCallExpr, seeds, map)
                                 }
                             }
                         }
                     }
 
                     expr.ifMethodCallExpr { methodCallExpr ->
-                        findValuesInMethod(testingClassName, testMethodDeclaration, methodCallExpr, seeds)
+                        findAndCollectValuesInMethod(testingClassName, testMethodDeclaration, methodCallExpr, seeds, map)
                     }
                 }
             }
-            return seeds
+            return Pair(seeds, map)
         }
 
-        private fun findValuesInMethod(
+        private fun findAndCollectValuesInMethod(
             testingClassName: String,
             methodDeclaration: MethodDeclaration,
             methodCallExpr: MethodCallExpr,
-            seeds: MutableList<Expression>
+            seeds: MutableList<Expression>,
+            map: MutableMap<String, MutableList<Expression>>
         ) {
             val methodCallExprString = methodCallExpr.toString()
 
@@ -54,7 +57,7 @@ internal class SeedFinder {
                 findImplicitArgTypeName(methodDeclaration, methodCallExprString) == testingClassName
             ) {
                 methodCallExpr.arguments.forEach { argOfMethod ->
-                    collect(argOfMethod, seeds)
+                    collect(argOfMethod, methodDeclaration, seeds, map)
                 }
             }
         }
@@ -98,10 +101,11 @@ internal class SeedFinder {
             return node
         }
 
-        private fun collect(node: Node, seeds: MutableList<Expression>) {
+        private fun collect(node: Node, testMethodDeclaration: MethodDeclaration, seeds: MutableList<Expression>, map: MutableMap<String, MutableList<Expression>>) {
             findValuesInArgument(node).also {
                 if (node !is NameExpr) {
                     seeds.add(it as Expression)
+                    map[testMethodDeclaration.nameAsString]!!.add(it)
                 }
             }
         }
