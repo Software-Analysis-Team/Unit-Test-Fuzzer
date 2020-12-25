@@ -4,14 +4,14 @@ import com.github.javaparser.StaticJavaParser
 import com.github.javaparser.ast.CompilationUnit
 import com.github.javaparser.ast.expr.Expression
 
-class JunitParser {
+class TestParser {
 
     companion object {
-        fun parse(testingClassName: String, classSource: String): Pair<CompilationUnit, List<Expression>> {
+        fun parse(testingClassName: String, classSource: String): Pair<CompilationUnit, Map<String, List<Expression>>> {
             val cu: CompilationUnit = StaticJavaParser.parse(classSource)
             val seeds = SeedFinder.getSeeds(testingClassName, cu)
 
-            return Pair(cu, seeds.first)
+            return Pair(cu, seeds)
         }
     }
 }

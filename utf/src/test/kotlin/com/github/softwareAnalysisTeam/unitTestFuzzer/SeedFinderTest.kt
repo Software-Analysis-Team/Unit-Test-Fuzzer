@@ -21,14 +21,17 @@ object SeedFinderTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value = seeds["test"]?.get(0)
 
             it("should collect value 13") {
-                assertEquals("13", seeds[0].toString())
+                assertEquals("13", value.toString())
             }
 
             it("$checkingNodeTypeDescription IntegerLiteralExpr") {
-                assertTrue(seeds[0].isIntegerLiteralExpr)
+                if (value != null) {
+                    assertTrue(value.isIntegerLiteralExpr)
+                }
             }
         }
 
@@ -41,14 +44,18 @@ object SeedFinderTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value = seeds["test"]?.get(0)
+
 
             it("should collect value -23.6") {
-                assertEquals("-23.6", seeds[0].toString())
+                assertEquals("-23.6", value.toString())
             }
 
             it("$checkingNodeTypeDescription DoubleLiteralExpr") {
-                assertTrue(seeds[0].isDoubleLiteralExpr)
+                if (value != null) {
+                    assertTrue(value.isDoubleLiteralExpr)
+                }
             }
         }
 
@@ -62,19 +69,26 @@ object SeedFinderTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value1 = seeds["test"]?.get(0)
+            val value2 = seeds["test"]?.get(1)
+
 
             it("should collect values false and hi") {
-                assertEquals("false", seeds[0].toString())
-                assertEquals("\"hi\"", seeds[1].toString())
+                assertEquals("false", value1.toString())
+                assertEquals("\"hi\"", value2.toString())
             }
 
             it("$checkingNodeTypeDescription BooleanLiteralExpr") {
-                assertTrue(seeds[0].isBooleanLiteralExpr)
+                if (value1 != null) {
+                    assertTrue(value1.isBooleanLiteralExpr)
+                }
             }
 
             it("$checkingNodeTypeDescription StringLiteralExpr") {
-                assertTrue(seeds[1].isStringLiteralExpr)
+                if (value2 != null) {
+                    assertTrue(value2.isStringLiteralExpr)
+                }
             }
         }
 
@@ -88,10 +102,10 @@ object SeedFinderTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
 
             it("should collect nothing") {
-                assertTrue(seeds.isEmpty())
+                assertTrue(seeds["test"]?.isEmpty()!!)
             }
 
             it("should replace nothing") {
@@ -110,11 +124,13 @@ object SeedFinderTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value1 = seeds["test"]?.get(0)
+            val value2 = seeds["test"]?.get(1)
 
             it("should collect values true and hi") {
-                assertEquals("true", seeds[0].toString())
-                assertEquals("\"hi!\"", seeds[1].toString())
+                assertEquals("true", value1.toString())
+                assertEquals("\"hi!\"", value2.toString())
             }
         }
 
@@ -128,10 +144,11 @@ object SeedFinderTest : Spek({
                     "}"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value = seeds["test"]?.get(0)
 
             it("should collect value null") {
-                assertEquals("null", seeds[0].toString())
+                assertEquals("null", value.toString())
             }
         }
 
@@ -147,10 +164,10 @@ object SeedFinderTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
 
             it("should collect nothing") {
-                assertTrue(seeds.isEmpty())
+                assertTrue(seeds["test"]?.isEmpty()!!)
             }
 
             it("should replace nothing") {
@@ -160,7 +177,6 @@ object SeedFinderTest : Spek({
     }
 
     describe("calling on the real generated test cases") {
-
         describe("Evosuite test") {
             val testClass = "public class MyInteger_ESTest extends MyInteger_ESTest_scaffolding {\n" +
                     "\n" +
@@ -174,10 +190,11 @@ object SeedFinderTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val seeds = SeedFinder.getSeeds(className, cu).first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value = seeds["test3"]?.get(0)
 
             it("should collect 650") {
-                assertEquals("650", seeds[0].toString())
+                assertEquals("650", value.toString())
             }
         }
 
@@ -198,11 +215,12 @@ object SeedFinderTest : Spek({
                     "}\n"
 
             val cu: CompilationUnit = StaticJavaParser.parse(testClass)
-            val pair = SeedFinder.getSeeds(className, cu)
-            val seeds = pair.first
+            val seeds = SeedFinder.getSeeds(className, cu)
+            val value = seeds["test002"]?.get(0)
+
 
             it("should collect 0") {
-                assertEquals("0", seeds[0].toString())
+                assertEquals("0", value.toString())
             }
         }
     }

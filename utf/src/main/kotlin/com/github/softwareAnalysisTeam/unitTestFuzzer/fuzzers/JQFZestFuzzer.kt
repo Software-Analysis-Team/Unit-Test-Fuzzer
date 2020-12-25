@@ -37,7 +37,7 @@ class JQFZestFuzzer : Fuzzer {
         commandToRepr = "${Paths.get(projectDir, "libs/jqf/bin/jqf-repro")} -c $paths"
     }
 
-    override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): Map<String,List<String>> {
+    override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: Map<String, List<Expression>>): Map<String,List<String>> {
         if (seeds.isEmpty()) {
             logger.debug("List with seeds is empty.")
             return mutableMapOf()
@@ -57,10 +57,7 @@ class JQFZestFuzzer : Fuzzer {
         val testToFuzz = cu.clone()
         collectAndDeleteAsserts(testToFuzz)
 
-        val fuzzingSeeds = SeedFinder.getSeeds(testingClassName, testToFuzz)
-        val map = fuzzingSeeds.second
-
-        val classForFuzzing = constructClassToFuzz(testToFuzz, fuzzingSeeds, classForFuzzingName)
+        val classForFuzzing = constructClassToFuzz(testToFuzz, seeds, classForFuzzingName)
         fileForFuzzing.writeText(classForFuzzing.toString())
 
         val classForSaving = constructClassForSaving(classForFuzzing)
@@ -80,7 +77,7 @@ class JQFZestFuzzer : Fuzzer {
         val failureFuzzResultsPath = Paths.get(resourcesDir, "fuzz-results", "failures")
 
         try {
-            map.keys.forEach { methodName ->
+            seeds.keys.forEach { methodName ->
                 CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", resourcesDir)
 
                 Files.walk(corpusFuzzResultsPath).forEach {path ->
@@ -182,7 +179,7 @@ class JQFZestFuzzer : Fuzzer {
 
     private fun constructClassToFuzz(
         cu: CompilationUnit,
-        seeds: Pair<List<Expression>, Map<String, List<Expression>>>,
+        seeds: Map<String, List<Expression>>,
         className: String
     ): CompilationUnit {
         val fileToFuzz = CompilationUnit()
@@ -209,7 +206,7 @@ class JQFZestFuzzer : Fuzzer {
             fuzzingMethod.setUpMethodForFuzzing(
                 it,
                 methodAnnotation,
-                seeds.second[it.nameAsString] as MutableList<Expression>
+                seeds[it.nameAsString] as MutableList<Expression>
             )
         }
 
