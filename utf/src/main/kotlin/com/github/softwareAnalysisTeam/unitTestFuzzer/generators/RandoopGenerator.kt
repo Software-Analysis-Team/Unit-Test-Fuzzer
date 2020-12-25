@@ -5,7 +5,6 @@ import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
 import com.github.softwareAnalysisTeam.unitTestFuzzer.logger
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 
 class RandoopGenerator(
@@ -15,17 +14,20 @@ class RandoopGenerator(
 
     override fun getTests(testClassName: String, projectCP: String): List<String> {
         val tests: MutableList<String> = mutableListOf()
-        var generatedTestsDir: Path? = null
+        var generatedTestsDir: File? = null
         try {
-            generatedTestsDir = Files.createDirectory(Paths.get(projectCP, "randoopGeneratedTests"))
+            generatedTestsDir = Paths.get(projectCP, "randoopGeneratedTests").toFile()
+            if (!generatedTestsDir.exists()) {
+                generatedTestsDir.mkdir()
+            }
 
             val defaultCommand: String =
                 javaHome + File.separator + "bin" + File.separator + "java" + " " + "-classpath" + " " + projectCP + File.pathSeparator + randoopJarLocation + " " + "randoop.main.Main gentests" +
-                        " " + "--testclass=" + testClassName + " " + "--time-limit=5"
+                        " " + "--testclass=" + testClassName + " " + "--time-limit=3"
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 
-            Files.walk(generatedTestsDir).forEach {
+            Files.walk(generatedTestsDir.toPath()).forEach {
                 if (Files.isRegularFile(it)) {
                     tests.add(it.toFile().readText())
                 }
@@ -35,10 +37,9 @@ class RandoopGenerator(
             logger.error(e.stackTraceToString())
         }
         finally {
-            generatedTestsDir?.toFile()?.deleteRecursively()
+            generatedTestsDir?.deleteRecursively()
         }
 
         return tests
-
     }
 }
