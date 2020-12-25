@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
 
     // working with only one test file
     // todo: replace with for loop
-    val parsed = JunitParser.parse(className, tests[0])
+    val parsed = TestParser.parse(className, tests[0])
     val test = parsed.first
     val seeds = parsed.second
     val values = JQFZestFuzzer().getValues(className, test, seeds)
