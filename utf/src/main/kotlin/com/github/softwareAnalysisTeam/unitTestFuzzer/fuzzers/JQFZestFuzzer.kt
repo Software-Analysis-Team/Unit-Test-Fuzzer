@@ -11,7 +11,8 @@ import com.github.softwareAnalysisTeam.unitTestFuzzer.Fuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.SeedFinder
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestCreator.Companion.collectAndDeleteAsserts
 import com.github.softwareAnalysisTeam.unitTestFuzzer.logger
-import java.io.File
+import java.io.*
+import java.nio.file.Files
 import java.nio.file.Paths
 
 
@@ -22,7 +23,7 @@ class JQFZestFuzzer : Fuzzer {
     private var paths: String
     private val projectDir = Paths.get("").toAbsolutePath().toString()
     private val resourcesDir = Paths.get(projectDir, "src", "main", "resources").toString()
-    protected val JQFgeneratedValuesDirName = "JQFGeneratedValuesForTests"
+    private val JQFgeneratedValuesDirName = "JQFGeneratedValuesForTests"
 
     init {
         val fileForPaths = File(projectDir + File.separator + "JQFPaths")
@@ -36,17 +37,16 @@ class JQFZestFuzzer : Fuzzer {
         commandToRepr = "${Paths.get(projectDir, "libs/jqf/bin/jqf-repro")} -c $paths"
     }
 
-    override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): List<List<String>> {
+    override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): Map<String,List<String>> {
         if (seeds.isEmpty()) {
             logger.debug("List with seeds is empty.")
-            return mutableListOf()
+            return mutableMapOf()
         }
 
         // assume our testing class is in resourceDir
         // todo: fix it
         val classForFuzzingName = "ClassForFuzzing"
         val classForSavingName = "ClassForSaving"
-        //val methodName = "methodForFuzzing"
 
         val fileForFuzzing = File(resourcesDir + File.separator + "$classForFuzzingName.java")
         fileForFuzzing.createNewFile()
@@ -57,17 +57,13 @@ class JQFZestFuzzer : Fuzzer {
         val testToFuzz = cu.clone()
         collectAndDeleteAsserts(testToFuzz)
 
-//        val fileWithGeneratedValues = File(resourcesDir + File.separator + generatedValuesFileName)
-//        fileWithGeneratedValues.createNewFile()
-
         val fuzzingSeeds = SeedFinder.getSeeds(testingClassName, testToFuzz)
         val map = fuzzingSeeds.second
 
         val classForFuzzing = constructClassToFuzz(testToFuzz, fuzzingSeeds, classForFuzzingName)
         fileForFuzzing.writeText(classForFuzzing.toString())
 
-        val classForSaving = classForFuzzing.clone()
-        constructClassForSaving(classForSaving)
+        val classForSaving = constructClassForSaving(classForFuzzing)
         fileForSaving.writeText(classForSaving.toString())
 
         CommandExecutor.execute(
@@ -75,63 +71,93 @@ class JQFZestFuzzer : Fuzzer {
             resourcesDir
         )
 
-        val generatedValuesDir = (Paths.get(projectDir, "$JQFgeneratedValuesDirName")).toFile()
+        val generatedValuesDir = (Paths.get(resourcesDir, JQFgeneratedValuesDirName)).toFile()
         if (!generatedValuesDir.exists()) {
             generatedValuesDir.mkdir()
         }
 
+        val corpusFuzzResultsPath = Paths.get(resourcesDir, "fuzz-results", "corpus")
+        val failureFuzzResultsPath = Paths.get(resourcesDir, "fuzz-results", "failures")
+
         try {
+            map.keys.forEach { methodName ->
+                CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", resourcesDir)
 
-            CommandExecutor.execute("$commandToRun $classForFuzzingName test018", resourcesDir)
-            CommandExecutor.execute(
-                "$commandToRepr $classForSavingName test018 fuzz-results/corpus/id_000000",
-                resourcesDir
-            )
+                Files.walk(corpusFuzzResultsPath).forEach {path ->
+                    if (Files.isRegularFile(path)) {
+                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
+                    }
+                }
 
-            //CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
+                Files.walk(failureFuzzResultsPath).forEach {path ->
+                    if (Files.isRegularFile(path)) {
+                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
+                    }
+                }
+            }
 
-            //        map.forEach {
-//            CommandExecutor.execute("$commandToRun $classForFuzzingName ${it.key}", resourcesDir)
-//
-//            // todo: iterate over all corpus/failures
-//            CommandExecutor.execute("$commandToRepr $classForSavingName ${it.key} fuzz-results/failures/id_000000", resourcesDir)
-//        }
-
-
-//            Files.walk(generatedTestsDir).forEach {
-//                if (Files.isRegularFile(it)) {
-//                    tests.add(it.toFile().readText())
-//                }
-//            }
         } catch (e: Exception) {
             logger.error(e.stackTraceToString())
         }
 
-        //fileWithGeneratedValues.delete()
-        //fileForFuzzing.delete()
-        //fileForSaving.delete()
+        fileForFuzzing.delete()
+        fileForSaving.delete()
 
         File(resourcesDir + File.separator + "$classForFuzzingName.class").delete()
         File(resourcesDir + File.separator + "$classForSavingName.class").delete()
 
-        return mutableListOf<List<String>>()
+        val valuesForEachTest = mutableMapOf<String, List<String>>()
+
+        Files.walk(generatedValuesDir.toPath()).forEach {
+                if (Files.isRegularFile(it)) {
+                    val methodAndFileName = it.fileName.toString()
+                    val listOfValues= mutableListOf<String>()
+                    var fileInputStream: FileInputStream? = null
+                    var objectInputStream: ObjectInputStream? = null
+
+                    try {
+                        fileInputStream = FileInputStream(generatedValuesDir.toString() + File.separator + methodAndFileName)
+                        objectInputStream = ObjectInputStream(fileInputStream)
+
+                        while (true) {
+                            listOfValues.add(objectInputStream.readObject().toString())
+                        }
+                    } catch (e: EOFException) {
+                        // todo: find a better way to stop reading from file
+                    } catch (e: Exception) {
+                        logger.error(e.stackTraceToString())
+                    } finally {
+                        objectInputStream?.close()
+                        fileInputStream?.close()
+                    }
+
+                    valuesForEachTest[methodAndFileName] = listOfValues
+                }
+            }
+
+        return valuesForEachTest
     }
 
-    private fun constructClassForSaving(classForFuzzing: CompilationUnit) {
-        classForFuzzing.walk(ClassOrInterfaceDeclaration::class.java) {
+    private fun constructClassForSaving(classForFuzzing: CompilationUnit): CompilationUnit {
+        val classForSaving = classForFuzzing.clone()
+        classForSaving.walk(ClassOrInterfaceDeclaration::class.java) {
             if (it.nameAsString == "ClassForFuzzing") it.setName("ClassForSaving")
         }
 
-        classForFuzzing.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
+        classForSaving.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
             val tryStmt = TryStmt()
             val blockStmt = BlockStmt()
-            blockStmt.addStatement("File file = new File(\"$JQFgeneratedValuesDirName/generatedValuesFrom_${testMethodDeclaration.nameAsString}\");")
+            blockStmt.addStatement("File file = new File(\"$JQFgeneratedValuesDirName/${testMethodDeclaration.nameAsString}\");")
             blockStmt.addStatement("file.createNewFile();")
-            blockStmt.addStatement("FileWriter writer = new FileWriter(file);")
+            blockStmt.addStatement("OutputStream fileOutputStream = new FileOutputStream(file);")
+            blockStmt.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
+
             for (parameter in testMethodDeclaration.parameters) {
-                blockStmt.addStatement("writer.write(${parameter.name} + \"\\n\");")
+                blockStmt.addStatement("objectOutputStream.writeObject(${parameter.name});")
             }
-            blockStmt.addStatement("writer.close();")
+            blockStmt.addStatement("objectOutputStream.close();")
+            blockStmt.addStatement("fileOutputStream.close();")
+
             tryStmt.tryBlock = blockStmt
 
             val catchClause = CatchClause()
@@ -151,6 +177,7 @@ class JQFZestFuzzer : Fuzzer {
 
             testMethodDeclaration.setBody(body)
         }
+        return classForSaving
     }
 
     private fun constructClassToFuzz(

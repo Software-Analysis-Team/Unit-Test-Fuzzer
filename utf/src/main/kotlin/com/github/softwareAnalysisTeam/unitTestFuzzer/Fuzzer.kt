@@ -4,5 +4,5 @@ import com.github.javaparser.ast.CompilationUnit
 import com.github.javaparser.ast.expr.Expression
 
 interface Fuzzer {
-    fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): List<List<String>>
+    fun getValues(testingClassName: String, cu: CompilationUnit, seeds: List<Expression>): Map<String, List<String>>
 }
