@@ -1,7 +1,6 @@
 package com.github.softwareAnalysisTeam.unitTestFuzzer
 
 import com.github.softwareAnalysisTeam.unitTestFuzzer.fuzzers.JQFZestFuzzer
-import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.EvosuiteGenerator
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.RandoopGenerator
 import mu.KotlinLogging
 import org.slf4j.Logger
@@ -18,11 +17,20 @@ fun main(args: Array<String>) {
     val randoopGenerator = RandoopGenerator(javaHome, randoopJar)
     val tests = randoopGenerator.getTests(className, buildLocation)
 
-    // working with only one test file
     // todo: replace with for loop
-    val parsed = TestParser.parse(className, tests[0])
-    val test = parsed.first
-    val seeds = parsed.second
-    val values = JQFZestFuzzer().getValues(className, test, seeds)
-    //TestCreator.createTest(test, seeds, values[0])
+//    val parsed = TestParser.parse(className, tests[0])
+//    val test = parsed.first
+//    val seeds = parsed.second
+
+
+    val test = TestParser.parse(className, tests[0])
+    //val seeds = SeedFinder.getSeeds(testingClassName, cu)
+
+    val testToFuzz = test.clone()
+    val seeds = SeedFinder.getSeeds(className, testToFuzz)
+    val values = JQFZestFuzzer().getValues(className,testToFuzz, seeds)
+
+    println()
+
+    TestCreator.createTest(test, SeedFinder.getSeeds(className, test), values)
 }
