@@ -23,7 +23,7 @@ class RandoopGenerator(
 
             val defaultCommand: String =
                 javaHome + File.separator + "bin" + File.separator + "java" + " " + "-classpath" + " " + projectCP + File.pathSeparator + randoopJarLocation + " " + "randoop.main.Main gentests" +
-                        " " + "--testclass=" + testClassName + " " + "--time-limit=3"
+                        " " + "--testclass=" + testClassName + " " + "--time-limit=1"
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 

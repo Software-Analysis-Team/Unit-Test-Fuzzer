@@ -6,9 +6,25 @@ import com.github.javaparser.ast.expr.*
 
 class TestCreator {
     companion object {
-        fun createTest(cu: CompilationUnit, seeds: List<Expression>, generatedValues: List<String>) {
-            for (i in seeds.indices) {
-                seeds[i].replaceWithNewValue(generatedValues[i])
+        fun createTest(
+            cu: CompilationUnit,
+            seeds: Map<String, List<Expression>>,
+            generatedValues: Map<String, List<String>>
+        ) {
+            for (method in seeds.keys) {
+                val valuePlaces = seeds[method]!!
+                val values = generatedValues[method]
+
+                for (i in valuePlaces.indices) {
+
+                    // todo: add the same tests with another generated values
+                    if (values != null) {
+                        if (i < values.size)
+                            valuePlaces[i].replaceWithNewValue(values[i])
+                    } else {
+                        break;
+                    }
+                }
             }
 
             // todo: modify asserts
@@ -16,7 +32,7 @@ class TestCreator {
             // todo: write created test to file
         }
 
-        fun Expression.replaceWithNewValue(newValue: String) {
+        private fun Expression.replaceWithNewValue(newValue: String) {
             when (this) {
                 is BooleanLiteralExpr -> this.setValue(newValue.toBoolean())
                 is IntegerLiteralExpr -> this.setInt(Integer.parseInt(newValue))

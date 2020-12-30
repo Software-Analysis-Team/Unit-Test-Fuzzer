@@ -8,7 +8,6 @@ import com.github.javaparser.ast.stmt.*
 import com.github.javaparser.ast.type.*
 import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.Fuzzer
-import com.github.softwareAnalysisTeam.unitTestFuzzer.SeedFinder
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestCreator.Companion.collectAndDeleteAsserts
 import com.github.softwareAnalysisTeam.unitTestFuzzer.logger
 import java.io.*
@@ -37,7 +36,11 @@ class JQFZestFuzzer : Fuzzer {
         commandToRepr = "${Paths.get(projectDir, "libs/jqf/bin/jqf-repro")} -c $paths"
     }
 
-    override fun getValues(testingClassName: String, cu: CompilationUnit, seeds: Map<String, List<Expression>>): Map<String,List<String>> {
+    override fun getValues(
+        testingClassName: String,
+        testToFuzz: CompilationUnit,
+        seeds: Map<String, List<Expression>>
+    ): Map<String, List<String>> {
         if (seeds.isEmpty()) {
             logger.debug("List with seeds is empty.")
             return mutableMapOf()
@@ -54,7 +57,6 @@ class JQFZestFuzzer : Fuzzer {
         val fileForSaving = File(resourcesDir + File.separator + "$classForSavingName.java")
         fileForSaving.createNewFile()
 
-        val testToFuzz = cu.clone()
         collectAndDeleteAsserts(testToFuzz)
 
         val classForFuzzing = constructClassToFuzz(testToFuzz, seeds, classForFuzzingName)
@@ -73,20 +75,21 @@ class JQFZestFuzzer : Fuzzer {
             generatedValuesDir.mkdir()
         }
 
-        val corpusFuzzResultsPath = Paths.get(resourcesDir, "fuzz-results", "corpus")
-        val failureFuzzResultsPath = Paths.get(resourcesDir, "fuzz-results", "failures")
+        val fuzzResultsPath = Paths.get(resourcesDir, "fuzz-results")
+        val corpusFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "corpus")
+        val failureFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "failures")
 
         try {
             seeds.keys.forEach { methodName ->
                 CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", resourcesDir)
 
-                Files.walk(corpusFuzzResultsPath).forEach {path ->
+                Files.walk(corpusFuzzResultsPath).forEach { path ->
                     if (Files.isRegularFile(path)) {
                         CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
                     }
                 }
 
-                Files.walk(failureFuzzResultsPath).forEach {path ->
+                Files.walk(failureFuzzResultsPath).forEach { path ->
                     if (Files.isRegularFile(path)) {
                         CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
                     }
@@ -95,6 +98,8 @@ class JQFZestFuzzer : Fuzzer {
 
         } catch (e: Exception) {
             logger.error(e.stackTraceToString())
+        } finally {
+            fuzzResultsPath.toFile().deleteRecursively()
         }
 
         fileForFuzzing.delete()
@@ -106,31 +111,34 @@ class JQFZestFuzzer : Fuzzer {
         val valuesForEachTest = mutableMapOf<String, List<String>>()
 
         Files.walk(generatedValuesDir.toPath()).forEach {
-                if (Files.isRegularFile(it)) {
-                    val methodAndFileName = it.fileName.toString()
-                    val listOfValues= mutableListOf<String>()
-                    var fileInputStream: FileInputStream? = null
-                    var objectInputStream: ObjectInputStream? = null
+            if (Files.isRegularFile(it)) {
+                val methodAndFileName = it.fileName.toString()
+                val listOfValues = mutableListOf<String>()
+                var fileInputStream: FileInputStream? = null
+                var objectInputStream: ObjectInputStream? = null
 
-                    try {
-                        fileInputStream = FileInputStream(generatedValuesDir.toString() + File.separator + methodAndFileName)
-                        objectInputStream = ObjectInputStream(fileInputStream)
+                try {
+                    fileInputStream =
+                        FileInputStream(generatedValuesDir.toString() + File.separator + methodAndFileName)
+                    objectInputStream = ObjectInputStream(fileInputStream)
 
-                        while (true) {
-                            listOfValues.add(objectInputStream.readObject().toString())
-                        }
-                    } catch (e: EOFException) {
-                        // todo: find a better way to stop reading from file
-                    } catch (e: Exception) {
-                        logger.error(e.stackTraceToString())
-                    } finally {
-                        objectInputStream?.close()
-                        fileInputStream?.close()
+                    while (true) {
+                        listOfValues.add(objectInputStream.readObject().toString())
                     }
-
-                    valuesForEachTest[methodAndFileName] = listOfValues
+                } catch (e: EOFException) {
+                    // todo: find a better way to stop reading from file
+                } catch (e: Exception) {
+                    logger.error(e.stackTraceToString())
+                } finally {
+                    objectInputStream?.close()
+                    fileInputStream?.close()
                 }
+
+                valuesForEachTest[methodAndFileName] = listOfValues
             }
+        }
+
+        generatedValuesDir.deleteRecursively()
 
         return valuesForEachTest
     }
