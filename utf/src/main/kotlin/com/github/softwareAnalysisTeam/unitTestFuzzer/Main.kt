@@ -1,5 +1,6 @@
 package com.github.softwareAnalysisTeam.unitTestFuzzer
 
+import com.github.javaparser.StaticJavaParser
 import com.github.softwareAnalysisTeam.unitTestFuzzer.fuzzers.JQFZestFuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.RandoopGenerator
 import mu.KotlinLogging
@@ -11,26 +12,26 @@ fun main(args: Array<String>) {
 
     val className = "MyInteger"
     val javaHome = "/Library/Java/JavaVirtualMachines/jdk1.8.0_241.jdk/Contents/Home"
-    val buildLocation = "/Users/femilame/Documents/diploma/fuzzer-project/utf/src/main/resources"
+    val projectLocation = "/Users/femilame/Documents/diploma/fuzzer-project/utf"
+    val resourceLocation = "$projectLocation/src/main/resources"
     val randoopJar = "/Users/femilame/Documents/diploma/fuzzer-project/utf/libs/randoop-all-4.2.4.jar"
 
     val randoopGenerator = RandoopGenerator(javaHome, randoopJar)
-    val tests = randoopGenerator.getTests(className, buildLocation)
+    val tests = randoopGenerator.getTests(className, resourceLocation)
 
-    // todo: replace with for loop
-//    val parsed = TestParser.parse(className, tests[0])
-//    val test = parsed.first
-//    val seeds = parsed.second
-
-
-    val test = TestParser.parse(className, tests[0])
-    //val seeds = SeedFinder.getSeeds(testingClassName, cu)
+    // todo: replace with for loop?
+    val test = StaticJavaParser.parse(tests[0])
 
     val testToFuzz = test.clone()
-    val seeds = SeedFinder.getSeeds(className, testToFuzz)
-    val values = JQFZestFuzzer().getValues(className,testToFuzz, seeds)
+    testToFuzz.removeTryCatchBlocks()
+    testToFuzz.removeAsserts()
 
-    println()
+    val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
+    val generatedValues = JQFZestFuzzer().getValues(className, testToFuzz, placesToFuzz)
 
-    TestCreator.createTest(test, SeedFinder.getSeeds(className, test), values)
+    val testToConstruct = test.clone()
+    testToConstruct.removeTryCatchBlocks()
+    val placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
+
+    TestCreator.createTest(test, testToConstruct, placesForNewValues, generatedValues, projectLocation)
 }

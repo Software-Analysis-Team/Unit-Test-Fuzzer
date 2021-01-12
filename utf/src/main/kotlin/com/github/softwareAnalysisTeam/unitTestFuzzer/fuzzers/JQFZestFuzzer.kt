@@ -8,7 +8,6 @@ import com.github.javaparser.ast.stmt.*
 import com.github.javaparser.ast.type.*
 import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.Fuzzer
-import com.github.softwareAnalysisTeam.unitTestFuzzer.TestCreator.Companion.collectAndDeleteAsserts
 import com.github.softwareAnalysisTeam.unitTestFuzzer.logger
 import java.io.*
 import java.nio.file.Files
@@ -56,8 +55,6 @@ class JQFZestFuzzer : Fuzzer {
 
         val fileForSaving = File(resourcesDir + File.separator + "$classForSavingName.java")
         fileForSaving.createNewFile()
-
-        collectAndDeleteAsserts(testToFuzz)
 
         val classForFuzzing = constructClassToFuzz(testToFuzz, seeds, classForFuzzingName)
         fileForFuzzing.writeText(classForFuzzing.toString())
