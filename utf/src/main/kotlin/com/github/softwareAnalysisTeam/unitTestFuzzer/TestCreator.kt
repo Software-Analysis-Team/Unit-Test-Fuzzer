@@ -13,11 +13,9 @@ import com.github.javaparser.ast.stmt.CatchClause
 import com.github.javaparser.ast.stmt.TryStmt
 import com.github.javaparser.ast.type.ArrayType
 import com.github.javaparser.ast.type.ClassOrInterfaceType
-import java.io.EOFException
 import java.io.File
 import java.io.FileInputStream
 import java.io.ObjectInputStream
-import java.io.Serializable
 
 class TestCreator {
     companion object {
@@ -56,16 +54,15 @@ class TestCreator {
 
             val classToRun =  fileToRun.addClass(regressionClassName, Modifier.Keyword.PUBLIC)
 
-            // todo: add the same instead of hardcoding "debug = false" in JQFZestFuzzer
             testToConstruct.walk(FieldDeclaration::class.java) {
                 classToRun.addMember(it)
             }
-
 
             val methods = mutableListOf<String>()
             testToConstruct.walk(MethodDeclaration::class.java) {
                 val methodToAdd = it.clone()
                 methodToAdd.addModifier(Modifier.Keyword.STATIC)
+                methodToAdd.addParameter(Parameter(ClassOrInterfaceType("ObjectOutputStream"), "objectOutputStream"))
 
                 classToRun.addMember(methodToAdd)
                 methods.add(it.nameAsString)
@@ -78,12 +75,19 @@ class TestCreator {
             }
 
             val regressionValuesFilePath = "$resourcePath/regressionValues"
+            classToRun.addMember(FieldDeclaration())
+
+            // reduce it?
+            val mapOfMethodVariables = mutableMapOf<String, MutableList<String>>()
 
             fileToRun.walk(MethodDeclaration::class.java) { methodDecl ->
-                val listOfVariables = mutableListOf<String>()
+                val curList = mutableListOf<String>()
+                mapOfMethodVariables[methodDecl.nameAsString] = curList
                 methodDecl.walk(VariableDeclarationExpr::class.java) { varDecl ->
                     varDecl.variables.forEach {
-                        listOfVariables.add(it.nameAsString)
+                        if (it.type.isPrimitiveType || it.typeAsString == "String") {
+                            curList.add(it.nameAsString)
+                        }
                     }
                 }
 
@@ -92,20 +96,12 @@ class TestCreator {
 
                     val tryStmt = TryStmt()
                     val blockStmt = BlockStmt()
-                    blockStmt.addStatement("File file = new File(\"$regressionValuesFilePath\");")
-                    blockStmt.addStatement("file.createNewFile();")
-                    blockStmt.addStatement("OutputStream fileOutputStream = new FileOutputStream(file, true);")
-                    blockStmt.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
 
-                    for (variableName in listOfVariables) {
-                        blockStmt.addStatement("if ($variableName instanceof Serializable) objectOutputStream.writeObject(${variableName});")
+                    for (variableName in curList) {
+                        blockStmt.addStatement("objectOutputStream.writeObject(${variableName});")
                     }
 
-                    blockStmt.addStatement("objectOutputStream.close();")
-                    blockStmt.addStatement("fileOutputStream.close();")
-
                     tryStmt.tryBlock = blockStmt
-
                     val catchClause = CatchClause()
                     val parameter = Parameter()
                     parameter.setName("e")
@@ -127,9 +123,17 @@ class TestCreator {
             mainMethod.addThrownException(ClassOrInterfaceType("Throwable"))
             val mainBody = mainMethod.createBody()
 
+            mainBody.addStatement("File file = new File(\"$regressionValuesFilePath\");")
+            mainBody.addStatement("file.createNewFile();")
+            mainBody.addStatement("OutputStream fileOutputStream = new FileOutputStream(file, true);")
+            mainBody.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
+
             for (method in methods) {
-                mainBody.addStatement("$method();")
+                mainBody.addStatement("$method(objectOutputStream);")
             }
+
+            mainBody.addStatement("objectOutputStream.close();")
+            mainBody.addStatement("fileOutputStream.close();")
 
             try {
                 val fileForClassToRun = File("$resourcePath/$regressionClassName.java")
@@ -138,7 +142,6 @@ class TestCreator {
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
-
 
             CommandExecutor.execute("javac $regressionClassName.java", resourcePath)
             CommandExecutor.execute("java $regressionClassName", resourcePath)
@@ -149,36 +152,35 @@ class TestCreator {
             var fileInputStream: FileInputStream? = null
             var objectInputStream: ObjectInputStream? = null
 
-            try {
+//            try {
                 fileInputStream =
                     FileInputStream(regressionValuesFile)
                 objectInputStream = ObjectInputStream(fileInputStream)
 
-                while (true) {
-                    listOfRegressionValues.add(objectInputStream.readObject().toString())
-                }
-            } catch (e: EOFException) {
-                // todo: find a better way to stop reading from file
-            } catch (e: Exception) {
-                logger.error(e.stackTraceToString())
-            } finally {
-                objectInputStream?.close()
-                fileInputStream?.close()
-            }
+//                while (true) {
+//                    listOfRegressionValues.add(objectInputStream.readObject().toString())
+//                }
+//            } catch (e: EOFException) {
+//                // todo: find a better way to stop reading from file
+//            } catch (e: Exception) {
+//                logger.error(e.stackTraceToString())
+//            } finally {
+//                objectInputStream?.close()
+//                fileInputStream?.close()
+//            }
 
             // todo: modify asserts
 
             val asserts = testToConstruct.collectAsserts()
-            val mapWithMethodAndNeededVariableName = mutableMapOf<String, MutableList<String>>()
-
             for (method in asserts.keys) {
-                mapWithMethodAndNeededVariableName[method] = mutableListOf()
-
-                if (!asserts[method].isNullOrEmpty()) {
-                    for (assert in asserts[method]!!) {
-                        assert.arguments.forEach { arg ->
-                            arg.walk(SimpleName::class.java) {
-                                mapWithMethodAndNeededVariableName[method]!!.add(it.asString())
+                if (!mapOfMethodVariables[method].isNullOrEmpty() && !asserts[method].isNullOrEmpty()) {
+                    for (variable in mapOfMethodVariables[method]!!) {
+                        asserts[method]!!.forEach { assert ->
+                            if (assert.toString().contains(variable)) {
+                                //val newAssert = assert.clone()
+                                //assert.setName("assertEquals")
+                                assert.setArgument(0, StringLiteralExpr(objectInputStream.readObject().toString()))
+                                assert.setArgument(1, StringLiteralExpr(variable))
                             }
                         }
                     }

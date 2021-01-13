@@ -35,7 +35,7 @@ fun CompilationUnit.collectAsserts(): Map<String, List<MethodCallExpr>> {
     return map
 }
 
-// todo: replace with more intelligent way to find asserts
 private fun isAssert(methodCallExpr: MethodCallExpr): Boolean {
-    return methodCallExpr.name.asString().toLowerCase().contains("assert")
+    return methodCallExpr.nameAsString.contains("assertEquals")
+            || methodCallExpr.toString().contains("org.junit.Assert.")
 }

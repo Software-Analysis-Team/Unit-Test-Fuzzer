@@ -194,15 +194,10 @@ class JQFZestFuzzer : Fuzzer {
         val classToFuzz = fileToFuzz.addClass(className, Modifier.Keyword.PUBLIC)
         val classAnnotation = SingleMemberAnnotationExpr().setMemberValue(NameExpr("JQF.class")).setName("RunWith")
         classToFuzz.addAnnotation(classAnnotation)
-        classToFuzz.members.add(
-            FieldDeclaration().addVariable(
-                VariableDeclarator(
-                    PrimitiveType.booleanType(),
-                    "debug",
-                    BooleanLiteralExpr(false)
-                )
-            )
-        )
+
+        cu.walk(FieldDeclaration::class.java) {
+            classToFuzz.addMember(it)
+        }
 
         val methodAnnotation = MarkerAnnotationExpr().setName("Fuzz")
 
