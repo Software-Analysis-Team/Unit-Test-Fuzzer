@@ -86,11 +86,11 @@ class JQFZestFuzzer : Fuzzer {
                     }
                 }
 
-                Files.walk(failureFuzzResultsPath).forEach { path ->
-                    if (Files.isRegularFile(path)) {
-                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
-                    }
-                }
+//                Files.walk(failureFuzzResultsPath).forEach { path ->
+//                    if (Files.isRegularFile(path)) {
+//                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
+//                    }
+//                }
             }
 
         } catch (e: Exception) {
