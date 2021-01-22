@@ -4,6 +4,7 @@ import com.github.javaparser.StaticJavaParser
 import com.github.javaparser.ast.CompilationUnit
 import com.github.javaparser.ast.Modifier
 import com.github.javaparser.ast.NodeList
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.FieldDeclaration
 import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.body.Parameter
@@ -13,8 +14,10 @@ import com.github.javaparser.ast.stmt.CatchClause
 import com.github.javaparser.ast.stmt.TryStmt
 import com.github.javaparser.ast.type.ArrayType
 import com.github.javaparser.ast.type.ClassOrInterfaceType
+import com.github.javaparser.ast.type.Type
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
 import java.io.ObjectInputStream
 
 class TestCreator {
@@ -28,7 +31,6 @@ class TestCreator {
         ) {
             val resourcePath =
                 projectPath + File.separator + "src" + File.separator + "main" + File.separator + "resources"
-            val libsPath = projectPath + File.separator + "libs"
 
             for (method in placesForNewValues.keys) {
                 val valuePlaces = placesForNewValues[method]!!
@@ -47,12 +49,13 @@ class TestCreator {
             }
 
             val regressionClassName = "RegressionClass"
+            val createdTestsClassName = "ModifiedTestsClass"
             val fileToRun = CompilationUnit()
 
             fileToRun.addImport("java.util.*")
             fileToRun.addImport("java.io.*")
 
-            val classToRun =  fileToRun.addClass(regressionClassName, Modifier.Keyword.PUBLIC)
+            val classToRun = fileToRun.addClass(regressionClassName, Modifier.Keyword.PUBLIC)
 
             testToConstruct.walk(FieldDeclaration::class.java) {
                 classToRun.addMember(it)
@@ -77,16 +80,15 @@ class TestCreator {
             val regressionValuesFilePath = "$resourcePath/regressionValues"
             classToRun.addMember(FieldDeclaration())
 
-            // reduce it?
-            val mapOfMethodVariables = mutableMapOf<String, MutableList<String>>()
+            val mapOfMethodVariables = mutableMapOf<String, MutableMap<String, Type>>()
 
             fileToRun.walk(MethodDeclaration::class.java) { methodDecl ->
-                val curList = mutableListOf<String>()
-                mapOfMethodVariables[methodDecl.nameAsString] = curList
+                val currentMap = mutableMapOf<String, Type>()
+                mapOfMethodVariables[methodDecl.nameAsString] = currentMap
                 methodDecl.walk(VariableDeclarationExpr::class.java) { varDecl ->
                     varDecl.variables.forEach {
                         if (it.type.isPrimitiveType || it.typeAsString == "String") {
-                            curList.add(it.nameAsString)
+                            currentMap[it.nameAsString] = it.type
                         }
                     }
                 }
@@ -97,7 +99,7 @@ class TestCreator {
                     val tryStmt = TryStmt()
                     val blockStmt = BlockStmt()
 
-                    for (variableName in curList) {
+                    for (variableName in currentMap.keys) {
                         blockStmt.addStatement("objectOutputStream.writeObject(${variableName});")
                     }
 
@@ -135,65 +137,81 @@ class TestCreator {
             mainBody.addStatement("objectOutputStream.close();")
             mainBody.addStatement("fileOutputStream.close();")
 
+            var fileForClassToRun: File? = null
             try {
-                val fileForClassToRun = File("$resourcePath/$regressionClassName.java")
+                fileForClassToRun = File("$resourcePath/$regressionClassName.java")
                 fileForClassToRun.createNewFile()
                 fileForClassToRun.writeText(fileToRun.toString())
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
 
-            CommandExecutor.execute("javac $regressionClassName.java", resourcePath)
+            CommandExecutor.execute("javac $fileForClassToRun", resourcePath)
             CommandExecutor.execute("java $regressionClassName", resourcePath)
 
-            val listOfRegressionValues = mutableListOf<String>()
+
+            try {
+                fileForClassToRun?.delete()
+                File("$resourcePath/$regressionClassName.class").delete()
+            } catch (e: IOException) {
+                logger.error(e.stackTraceToString())
+            }
+
             val regressionValuesFile = File(regressionValuesFilePath)
 
             var fileInputStream: FileInputStream? = null
             var objectInputStream: ObjectInputStream? = null
 
-//            try {
+            try {
                 fileInputStream =
                     FileInputStream(regressionValuesFile)
                 objectInputStream = ObjectInputStream(fileInputStream)
 
-//                while (true) {
-//                    listOfRegressionValues.add(objectInputStream.readObject().toString())
-//                }
-//            } catch (e: EOFException) {
-//                // todo: find a better way to stop reading from file
-//            } catch (e: Exception) {
-//                logger.error(e.stackTraceToString())
-//            } finally {
-//                objectInputStream?.close()
-//                fileInputStream?.close()
-//            }
+                val asserts = testToConstruct.collectAsserts()
+                for (method in asserts.keys) {
+                    if (!mapOfMethodVariables[method].isNullOrEmpty() && !asserts[method].isNullOrEmpty()) {
+                        for (variable in mapOfMethodVariables[method]!!) {
+                            asserts[method]!!.forEach { assert ->
+                                if (assert.toString().contains(variable.key)) {
+                                    assert.setName("assertEquals")
+                                    assert.arguments.clear()
+                                    assert.addArgument(NameExpr(objectInputStream.readObject().toString()))
+                                    assert.addArgument(NameExpr(variable.key))
 
-            // todo: modify asserts
-
-            val asserts = testToConstruct.collectAsserts()
-            for (method in asserts.keys) {
-                if (!mapOfMethodVariables[method].isNullOrEmpty() && !asserts[method].isNullOrEmpty()) {
-                    for (variable in mapOfMethodVariables[method]!!) {
-                        asserts[method]!!.forEach { assert ->
-                            if (assert.toString().contains(variable)) {
-                                //val newAssert = assert.clone()
-                                //assert.setName("assertEquals")
-                                assert.setArgument(0, StringLiteralExpr(objectInputStream.readObject().toString()))
-                                assert.setArgument(1, StringLiteralExpr(variable))
+                                    if (variable.value.asString().contains("double", true) ||
+                                        variable.value.asString().contains("long", true)
+                                    ) {
+                                        assert.addArgument("0.01")
+                                    }
+                                }
                             }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                logger.error(e.stackTraceToString())
+            } finally {
+                objectInputStream?.close()
+                fileInputStream?.close()
+                regressionValuesFile.delete()
             }
 
+            try {
+                val createdTestClassFile = File("$resourcePath/$createdTestsClassName.java")
+                createdTestClassFile.createNewFile()
 
-            // todo: write created test to file
+                originalTest.walk(ClassOrInterfaceDeclaration::class.java) { testClass ->
+                    testToConstruct.walk(MethodDeclaration::class.java) {
+                        // todo: edit method renaming (must be changed in case of adding more than one modified test, 1:1 -> 1:n)
+                        it.setName(it.nameAsString + "Modified")
+                        testClass.addMember(it)
+                    }
+                }
 
-            // for method in originalTests
-            // write to file method
-
-            // write new methods
+                createdTestClassFile.writeText(originalTest.toString())
+            } catch (e: Exception) {
+                logger.error(e.stackTraceToString())
+            }
         }
 
         private fun Expression.replaceWithNewValue(newValue: String) {
