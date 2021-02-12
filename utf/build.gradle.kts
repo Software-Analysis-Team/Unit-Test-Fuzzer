@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
+    java
     kotlin("jvm") version "1.4.20"
     id("org.jetbrains.intellij") version "0.4.22"
 }
@@ -52,3 +53,21 @@ tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
 
+val fatJar = task("fatJar", type = Jar::class) {
+    baseName = "${project.name}-all"
+    manifest {
+        attributes["Main-Class"] = "com.github.softwareAnalysisTeam.unitTestFuzzer.MainKt"
+    }
+
+    from(configurations
+        .runtimeClasspath.get()
+        .map { if (it.isDirectory) it else zipTree(it) })
+
+    with(tasks["jar"] as CopySpec)
+}
+
+tasks {
+    "build" {
+        dependsOn(fatJar)
+    }
+}
