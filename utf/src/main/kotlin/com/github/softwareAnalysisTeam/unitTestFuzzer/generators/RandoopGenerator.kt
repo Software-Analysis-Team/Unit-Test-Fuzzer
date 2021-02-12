@@ -8,21 +8,20 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 class RandoopGenerator(
-    private val javaHome: String,
-    private val randoopJarLocation: String
+    private val cp: String
 ) : TestGenerator {
 
-    override fun getTests(testClassName: String, projectCP: String): List<String> {
+    override fun getTests(testClassName: String, outputDir: String): List<String> {
         val tests: MutableList<String> = mutableListOf()
         var generatedTestsDir: File? = null
         try {
-            generatedTestsDir = Paths.get(projectCP, "randoopGeneratedTests").toFile()
+            generatedTestsDir = Paths.get(outputDir, "randoopGeneratedTests").toFile()
             if (!generatedTestsDir.exists()) {
                 generatedTestsDir.mkdir()
             }
 
             val defaultCommand: String =
-                javaHome + File.separator + "bin" + File.separator + "java" + " " + "-classpath" + " " + projectCP + File.pathSeparator + randoopJarLocation + " " + "randoop.main.Main gentests" +
+                "java " + "-classpath" + " " + cp + " " + "randoop.main.Main gentests" +
                         " " + "--testclass=" + testClassName + " " + "--time-limit=1"
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())

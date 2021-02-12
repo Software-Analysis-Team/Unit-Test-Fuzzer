@@ -14,25 +14,22 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 
-class JQFZestFuzzer : Fuzzer {
+class JQFZestFuzzer(private val outputDir: String, private var cp: String, JQFDir: String) : Fuzzer {
     private val commandToCompile: String
     private val commandToRun: String
     private val commandToRepr: String
-    private var paths: String
-    private val projectDir = Paths.get("").toAbsolutePath().toString()
-    private val resourcesDir = Paths.get(projectDir, "src", "main", "resources").toString()
     private val JQFgeneratedValuesDirName = "JQFGeneratedValuesForTests"
 
     init {
-        val fileForPaths = File(projectDir + File.separator + "JQFPaths")
+        val fileForPaths = File(outputDir + File.separator + "JQFPaths")
         fileForPaths.createNewFile()
-        CommandExecutor.execute("libs/jqf/scripts/classpath.sh", projectDir, fileForPaths)
-        paths = ".:" + fileForPaths.readText()
+        CommandExecutor.execute("$JQFDir/scripts/classpath.sh", outputDir, fileForPaths)
+        this.cp = "$cp:" + fileForPaths.readText()
         fileForPaths.delete()
 
-        commandToCompile = "javac -cp $paths"
-        commandToRun = "timeout 1s ${Paths.get(projectDir, "libs/jqf/bin/jqf-zest")} -c $paths"
-        commandToRepr = "${Paths.get(projectDir, "libs/jqf/bin/jqf-repro")} -c $paths"
+        commandToCompile = "javac -cp ${this.cp}"
+        commandToRun = "timeout 1s ${Paths.get(JQFDir, "/bin/jqf-zest")} -c ${this.cp}"
+        commandToRepr = "${Paths.get(JQFDir, "bin/jqf-repro")} -c ${this.cp}"
     }
 
     override fun getValues(
@@ -41,19 +38,17 @@ class JQFZestFuzzer : Fuzzer {
         seeds: Map<String, List<Expression>>
     ): Map<String, List<String>> {
         if (seeds.isEmpty()) {
-            logger.debug("List with seeds is empty.")
+            logger.debug("Map with seeds is empty.")
             return mutableMapOf()
         }
 
-        // assume our testing class is in resourceDir
-        // todo: fix it
         val classForFuzzingName = "ClassForFuzzing"
         val classForSavingName = "ClassForSaving"
 
-        val fileForFuzzing = File(resourcesDir + File.separator + "$classForFuzzingName.java")
+        val fileForFuzzing = File(outputDir + File.separator + "$classForFuzzingName.java")
         fileForFuzzing.createNewFile()
 
-        val fileForSaving = File(resourcesDir + File.separator + "$classForSavingName.java")
+        val fileForSaving = File(outputDir + File.separator + "$classForSavingName.java")
         fileForSaving.createNewFile()
 
         val classForFuzzing = constructClassToFuzz(testToFuzz, seeds, classForFuzzingName)
@@ -63,32 +58,32 @@ class JQFZestFuzzer : Fuzzer {
         fileForSaving.writeText(classForSaving.toString())
 
         CommandExecutor.execute(
-            "$commandToCompile $testingClassName.java ${fileForFuzzing.name} ${fileForSaving.name}",
-            resourcesDir
+            "$commandToCompile ${fileForFuzzing.name} ${fileForSaving.name}",
+            outputDir
         )
 
-        val generatedValuesDir = (Paths.get(resourcesDir, JQFgeneratedValuesDirName)).toFile()
+        val generatedValuesDir = (Paths.get(outputDir, JQFgeneratedValuesDirName)).toFile()
         if (!generatedValuesDir.exists()) {
             generatedValuesDir.mkdir()
         }
 
-        val fuzzResultsPath = Paths.get(resourcesDir, "fuzz-results")
+        val fuzzResultsPath = Paths.get(outputDir, "fuzz-results")
         val corpusFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "corpus")
         val failureFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "failures")
 
         try {
             seeds.keys.forEach { methodName ->
-                CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", resourcesDir)
+                CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", outputDir)
 
                 Files.walk(corpusFuzzResultsPath).forEach { path ->
                     if (Files.isRegularFile(path)) {
-                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
+                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", outputDir)
                     }
                 }
 
 //                Files.walk(failureFuzzResultsPath).forEach { path ->
 //                    if (Files.isRegularFile(path)) {
-//                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", resourcesDir)
+//                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", outputDir)
 //                    }
 //                }
             }
@@ -101,9 +96,8 @@ class JQFZestFuzzer : Fuzzer {
 
         fileForFuzzing.delete()
         fileForSaving.delete()
-
-        File(resourcesDir + File.separator + "$classForFuzzingName.class").delete()
-        File(resourcesDir + File.separator + "$classForSavingName.class").delete()
+        File(outputDir + File.separator + "$classForFuzzingName.class").delete()
+        File(outputDir + File.separator + "$classForSavingName.class").delete()
 
         val valuesForEachTest = mutableMapOf<String, List<String>>()
 

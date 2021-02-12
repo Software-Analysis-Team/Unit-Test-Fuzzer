@@ -23,16 +23,15 @@ import java.io.ObjectInputStream
 class TestCreator {
     companion object {
         fun createTest(
+            numberOfTest: Int,
             originalTest: CompilationUnit,
             testToConstruct: CompilationUnit,
             placesForNewValues: Map<String, List<Expression>>,
             generatedValues: Map<String, List<String>>,
-            projectPath: String
+            outputDir: String
         ) {
-            val resourcePath =
-                projectPath + File.separator + "src" + File.separator + "main" + File.separator + "resources"
-
             for (method in placesForNewValues.keys) {
+                // todo: fix duplication of tests that weren't fuzzed
                 val valuePlaces = placesForNewValues[method]!!
                 val values = generatedValues[method]
 
@@ -48,8 +47,8 @@ class TestCreator {
                 }
             }
 
-            val regressionClassName = "RegressionClass"
-            val createdTestsClassName = "ModifiedTestsClass"
+            val regressionClassName = "RegressionClass$numberOfTest"
+            val createdTestsClassName = "RegressionTest$numberOfTest"
             val fileToRun = CompilationUnit()
 
             fileToRun.addImport("java.util.*")
@@ -77,7 +76,7 @@ class TestCreator {
                 it.removeForced()
             }
 
-            val regressionValuesFilePath = "$resourcePath/regressionValues"
+            val regressionValuesFilePath = "$outputDir/regressionValues"
             classToRun.addMember(FieldDeclaration())
 
             val mapOfMethodVariables = mutableMapOf<String, MutableMap<String, Type>>()
@@ -139,20 +138,20 @@ class TestCreator {
 
             var fileForClassToRun: File? = null
             try {
-                fileForClassToRun = File("$resourcePath/$regressionClassName.java")
+                fileForClassToRun = File("$outputDir/$regressionClassName.java")
                 fileForClassToRun.createNewFile()
                 fileForClassToRun.writeText(fileToRun.toString())
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
 
-            CommandExecutor.execute("javac $fileForClassToRun", resourcePath)
-            CommandExecutor.execute("java $regressionClassName", resourcePath)
+            CommandExecutor.execute("javac $fileForClassToRun", outputDir)
+            CommandExecutor.execute("java $regressionClassName", outputDir)
 
 
             try {
                 fileForClassToRun?.delete()
-                File("$resourcePath/$regressionClassName.class").delete()
+                File("$outputDir/$regressionClassName.class").delete()
             } catch (e: IOException) {
                 logger.error(e.stackTraceToString())
             }
@@ -197,7 +196,7 @@ class TestCreator {
             }
 
             try {
-                val createdTestClassFile = File("$resourcePath/$createdTestsClassName.java")
+                val createdTestClassFile = File("$outputDir/$createdTestsClassName.java")
                 createdTestClassFile.createNewFile()
 
                 originalTest.walk(ClassOrInterfaceDeclaration::class.java) { testClass ->

@@ -55,9 +55,14 @@ internal class SeedFinder {
             map: MutableMap<String, MutableList<Expression>>
         ) {
             val methodCallExprString = methodCallExpr.toString()
+            val className = testingClassName.split(".").last()
+            val implicitArgType = findImplicitArgTypeName(methodDeclaration, methodCallExprString)
 
+            // todo: check if it works with all cases
             if (methodCallExprString.startsWith("$testingClassName.") ||
-                findImplicitArgTypeName(methodDeclaration, methodCallExprString) == testingClassName
+                methodCallExprString.startsWith("$className.") ||
+                implicitArgType == testingClassName ||
+                implicitArgType == className
             ) {
                 methodCallExpr.arguments.forEach { argOfMethod ->
                     collect(argOfMethod, methodDeclaration, map)
