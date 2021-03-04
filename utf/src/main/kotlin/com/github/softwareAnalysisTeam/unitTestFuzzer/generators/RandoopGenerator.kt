@@ -20,9 +20,8 @@ class RandoopGenerator(
                 generatedTestsDir.mkdir()
             }
 
-            val defaultCommand: String =
-                "java " + "-classpath" + " " + cp + " " + "randoop.main.Main gentests" +
-                        " " + "--testclass=" + testClassName + " " + "--time-limit=1"
+            val defaultCommand =
+                "java -classpath $cp randoop.main.Main gentests --testclass=$testClassName --time-limit=2"
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 
@@ -31,12 +30,10 @@ class RandoopGenerator(
                     tests.add(it.toFile().readText())
                 }
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             logger.error(e.stackTraceToString())
-        }
-        finally {
-            generatedTestsDir?.deleteRecursively()
+        } finally {
+//            generatedTestsDir?.deleteRecursively()
         }
 
         return tests

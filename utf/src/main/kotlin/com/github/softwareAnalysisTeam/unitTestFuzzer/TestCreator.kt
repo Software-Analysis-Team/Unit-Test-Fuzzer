@@ -28,7 +28,8 @@ class TestCreator {
             testToConstruct: CompilationUnit,
             placesForNewValues: Map<String, List<Expression>>,
             generatedValues: Map<String, List<String>>,
-            outputDir: String
+            outputDir: String,
+            cp: String
         ) {
             for (method in placesForNewValues.keys) {
                 // todo: fix duplication of tests that weren't fuzzed
@@ -145,9 +146,8 @@ class TestCreator {
                 logger.error(e.stackTraceToString())
             }
 
-            CommandExecutor.execute("javac $fileForClassToRun", outputDir)
-            CommandExecutor.execute("java $regressionClassName", outputDir)
-
+            CommandExecutor.execute("javac -classpath $cp $fileForClassToRun", outputDir)
+            CommandExecutor.execute("java -classpath $cp $regressionClassName", outputDir)
 
             try {
                 fileForClassToRun?.delete()
