@@ -11,7 +11,7 @@ class RandoopGenerator(
     private val cp: String
 ) : TestGenerator {
 
-    override fun getTests(testClassName: String, outputDir: String): List<String> {
+    override fun getTests(testClassName: String, outputDir: String, timeout: Int): List<String> {
         val tests: MutableList<String> = mutableListOf()
         var generatedTestsDir: File? = null
         try {
@@ -21,7 +21,7 @@ class RandoopGenerator(
             }
 
             val defaultCommand =
-                "java -classpath $cp randoop.main.Main gentests --testclass=$testClassName --time-limit=2"
+                "java -classpath $cp randoop.main.Main gentests --testclass=$testClassName --time-limit=$timeout"
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 
@@ -33,7 +33,7 @@ class RandoopGenerator(
         } catch (e: Exception) {
             logger.error(e.stackTraceToString())
         } finally {
-//            generatedTestsDir?.deleteRecursively()
+            generatedTestsDir?.deleteRecursively()
         }
 
         return tests

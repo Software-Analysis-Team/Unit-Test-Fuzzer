@@ -146,7 +146,7 @@ class TestCreator {
                 logger.error(e.stackTraceToString())
             }
 
-            CommandExecutor.execute("javac -classpath $cp $fileForClassToRun", outputDir)
+            CommandExecutor.execute("javac -encoding UTF-8 -classpath $cp $fileForClassToRun", outputDir)
             CommandExecutor.execute("java -classpath $cp $regressionClassName", outputDir)
 
             try {
