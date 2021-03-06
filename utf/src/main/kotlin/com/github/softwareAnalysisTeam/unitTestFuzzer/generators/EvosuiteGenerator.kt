@@ -2,20 +2,19 @@ package com.github.softwareAnalysisTeam.unitTestFuzzer.generators
 
 import com.github.softwareAnalysisTeam.unitTestFuzzer.CommandExecutor
 import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class EvosuiteGenerator(private val javaHome: String, private val evoSuiteJarLocation: String) : TestGenerator {
+class EvosuiteGenerator(private val evoSuiteJarLocation: String) : TestGenerator {
 
-    override fun getTests(testClassName: String, projectCP: String): List<String> {
+    override fun getTests(testClassName: String, outputDir: String, timeout: Int): List<String> {
         val tests: MutableList<String> = mutableListOf()
 
-        val defaultCommand: String =
-            javaHome + File.separator + "bin" + File.separator + "java" + " -jar " + evoSuiteJarLocation + " " + "-class" + " " + testClassName + " " + "-projectCP" + " " + projectCP
+        val defaultCommand =
+            "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $outputDir -Dsearch_budget=$timeout"
 
-        CommandExecutor.execute(defaultCommand, projectCP)
-        val generatedTestsDir = Paths.get(projectCP, "evosuite-tests")
+        CommandExecutor.execute(defaultCommand, outputDir)
+        val generatedTestsDir = Paths.get(outputDir, "evosuite-tests")
         Files.walk(generatedTestsDir).forEach {
             if (Files.isRegularFile(it)) {
                 tests.add(it.toFile().readText())

@@ -14,9 +14,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 
-class JQFZestFuzzer(private val outputDir: String, private var cp: String, JQFDir: String) : Fuzzer {
+class JQFZestFuzzer(private val outputDir: String, private var cp: String, private val JQFDir: String) : Fuzzer {
     private val commandToCompile: String
-    private val commandToRun: String
     private val commandToRepr: String
     private val JQFgeneratedValuesDirName = "JQFGeneratedValuesForTests"
 
@@ -28,19 +27,21 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, JQFDi
         fileForPaths.delete()
 
         commandToCompile = "javac -cp ${this.cp}"
-        commandToRun = "timeout 5s ${Paths.get(JQFDir, "bin", "jqf-zest")} -c ${this.cp}"
         commandToRepr = "${Paths.get(JQFDir, "bin", "jqf-repro")} -c ${this.cp}"
     }
 
     override fun getValues(
         testingClassName: String,
-        testToFuzz: CompilationUnit,
-        seeds: Map<String, List<Expression>>
+        cu: CompilationUnit,
+        seeds: Map<String, List<Expression>>,
+        budgetPerMethod: Double
     ): Map<String, List<String>> {
         if (seeds.isEmpty()) {
             logger.debug("Map with seeds is empty.")
             return mutableMapOf()
         }
+
+        val commandToRun = "timeout ${budgetPerMethod}s ${Paths.get(JQFDir, "bin", "jqf-zest")} -c ${this.cp}"
 
         val classForFuzzingName = "ClassForFuzzing"
         val classForSavingName = "ClassForSaving"
@@ -51,7 +52,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, JQFDi
         val fileForSaving = File(outputDir + File.separator + "$classForSavingName.java")
         fileForSaving.createNewFile()
 
-        val classForFuzzing = constructClassToFuzz(testToFuzz, seeds, classForFuzzingName)
+        val classForFuzzing = constructClassToFuzz(cu, seeds, classForFuzzingName)
         fileForFuzzing.writeText(classForFuzzing.toString())
 
         val classForSaving = constructClassForSaving(classForFuzzing)
@@ -96,13 +97,13 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, JQFDi
         } catch (e: Exception) {
             logger.error(e.stackTraceToString())
         } finally {
-            //fuzzResultsPath.toFile().deleteRecursively()
-        }
+            fuzzResultsPath.toFile().deleteRecursively()
 
-//        fileForFuzzing.delete()
-//        fileForSaving.delete()
-//        File(outputDir + File.separator + "$classForFuzzingName.class").delete()
-//        File(outputDir + File.separator + "$classForSavingName.class").delete()
+            fileForFuzzing.delete()
+            fileForSaving.delete()
+            File(outputDir + File.separator + "$classForFuzzingName.class").delete()
+            File(outputDir + File.separator + "$classForSavingName.class").delete()
+        }
 
         val valuesForEachTest = mutableMapOf<String, List<String>>()
 
