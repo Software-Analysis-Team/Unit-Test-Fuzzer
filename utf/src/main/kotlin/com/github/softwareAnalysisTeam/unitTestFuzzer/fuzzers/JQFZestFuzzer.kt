@@ -33,7 +33,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
     override fun getValues(
         testingClassName: String,
         cu: CompilationUnit,
-        seeds: Map<String, List<Expression>>,
+        seeds: Map<MethodDeclaration, List<Expression>>,
         budgetPerMethod: Double
     ): Map<String, List<String>> {
         if (seeds.isEmpty()) {
@@ -58,10 +58,8 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         val classForSaving = constructClassForSaving(classForFuzzing)
         fileForSaving.writeText(classForSaving.toString())
 
-        CommandExecutor.execute(
-            "$commandToCompile ${fileForFuzzing.name} ${fileForSaving.name}",
-            outputDir
-        )
+        CommandExecutor.execute("$commandToCompile ${fileForFuzzing.name}", outputDir)
+        CommandExecutor.execute("$commandToCompile ${fileForSaving.name}", outputDir)
 
         val generatedValuesDir = (Paths.get(outputDir, JQFgeneratedValuesDirName)).toFile()
         if (!generatedValuesDir.exists()) {
@@ -74,13 +72,13 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         val failureFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "failures")
 
         try {
-            seeds.keys.forEach { methodName ->
-                CommandExecutor.execute("$commandToRun $classForFuzzingName $methodName", outputDir)
+            seeds.keys.forEach { method ->
+                CommandExecutor.execute("$commandToRun $classForFuzzingName ${method.nameAsString}", outputDir)
                 if (Files.exists(corpusFuzzResultsPath)) {
                     Files.walk(corpusFuzzResultsPath).forEach { path ->
                         if (Files.isRegularFile(path)) {
                             CommandExecutor.execute(
-                                "$commandToRepr $classForSavingName $methodName $path",
+                                "$commandToRepr $classForSavingName ${method.nameAsString} $path",
                                 outputDir, File("$fuzzResultsPath/logs")
                             )
                         }
@@ -103,6 +101,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             fileForSaving.delete()
             File(outputDir + File.separator + "$classForFuzzingName.class").delete()
             File(outputDir + File.separator + "$classForSavingName.class").delete()
+            File(outputDir + File.separator + "$classForSavingName\$AppendingObjectOutputStream.class").delete()
         }
 
         val valuesForEachTest = mutableMapOf<String, List<String>>()
@@ -136,9 +135,6 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         }
 
         generatedValuesDir.deleteRecursively()
-
-        logger.debug(valuesForEachTest.toString())
-
         return valuesForEachTest
     }
 
@@ -152,9 +148,18 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             val tryStmt = TryStmt()
             val blockStmt = BlockStmt()
             blockStmt.addStatement("File file = new File(\"$JQFgeneratedValuesDirName/${testMethodDeclaration.nameAsString}\");")
-            blockStmt.addStatement("file.createNewFile();")
-            blockStmt.addStatement("OutputStream fileOutputStream = new FileOutputStream(file);")
-            blockStmt.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
+            blockStmt.addStatement("OutputStream fileOutputStream;")
+            blockStmt.addStatement("ObjectOutputStream objectOutputStream;")
+            blockStmt.addStatement(
+                "if(file.exists() && !file.isDirectory()) { \n" +
+                        "    fileOutputStream = new FileOutputStream(file, true);\n" +
+                        "    objectOutputStream = new AppendingObjectOutputStream(fileOutputStream);\n" +
+                        "} else {\n" +
+                        "    file.createNewFile();\n" +
+                        "    fileOutputStream = new FileOutputStream(file, true);\n" +
+                        "    objectOutputStream = new ObjectOutputStream(fileOutputStream);\n" +
+                        "}"
+            )
 
             for (parameter in testMethodDeclaration.parameters) {
                 blockStmt.addStatement("objectOutputStream.writeObject(${parameter.name});")
@@ -163,7 +168,6 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             blockStmt.addStatement("fileOutputStream.close();")
 
             tryStmt.tryBlock = blockStmt
-
             val catchClause = CatchClause()
             val parameter = Parameter()
             parameter.setName("e")
@@ -175,18 +179,24 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             val stmts: NodeList<CatchClause> = NodeList()
             stmts.add(catchClause)
             tryStmt.catchClauses = stmts
-
             val body = BlockStmt()
             body.addStatement(tryStmt)
 
             testMethodDeclaration.setBody(body)
         }
+
+        classForSaving.walk(ClassOrInterfaceDeclaration::class.java) {
+            if (it.nameAsString == "ClassForSaving") {
+                it.addInnerAppendingOutStreamClass()
+            }
+        }
+
         return classForSaving
     }
 
     private fun constructClassToFuzz(
         cu: CompilationUnit,
-        seeds: Map<String, List<Expression>>,
+        seeds: Map<MethodDeclaration, List<Expression>>,
         className: String
     ): CompilationUnit {
         val fileToFuzz = CompilationUnit()
@@ -208,7 +218,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             fuzzingMethod.setUpMethodForFuzzing(
                 it,
                 methodAnnotation,
-                seeds[it.nameAsString] as MutableList<Expression>
+                seeds[it] as? MutableList<Expression>
             )
         }
 
@@ -230,18 +240,44 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
     private fun MethodDeclaration.setUpMethodForFuzzing(
         testMethod: MethodDeclaration,
         methodAnnotation: AnnotationExpr,
-        seeds: List<Expression>
+        seeds: MutableList<Expression>?
     ) {
-        for (i in seeds.indices) {
-            val node = seeds[i]
-            this.addParameter(Parameter(node.getType(), "methodToFuzzArgument${i}"))
-            node.parentNode.get().replace(node, NameExpr("methodToFuzzArgument${i}"))
+        if (seeds != null) {
+            for (i in seeds.indices) {
+                val node = seeds[i]
+                this.addParameter(Parameter(node.getType(), "methodToFuzzArgument${i}"))
+                node.parentNode.get().replace(node, NameExpr("methodToFuzzArgument${i}"))
+            }
         }
 
         this.addAnnotation(methodAnnotation)
         if (testMethod.body.isPresent) {
             this.setBody(testMethod.body.get())
         }
+    }
+
+    private fun ClassOrInterfaceDeclaration.addInnerAppendingOutStreamClass() {
+
+        val innerAppendingOutStream = ClassOrInterfaceDeclaration()
+        innerAppendingOutStream.setName("AppendingObjectOutputStream")
+        innerAppendingOutStream.extendedTypes = NodeList(ClassOrInterfaceType("ObjectOutputStream"))
+
+        val constr = innerAppendingOutStream.addConstructor(Modifier.Keyword.PUBLIC)
+        constr.addThrownException(ClassOrInterfaceType("IOException"))
+        val constructorParameter = Parameter()
+        constructorParameter.setName("out")
+        constructorParameter.type = ClassOrInterfaceType("OutputStream")
+        constr.addParameter(constructorParameter)
+        constr.body = BlockStmt().addStatement("super(out);")
+
+        val writeStreamHeaderMethod =
+            innerAppendingOutStream.addMethod("writeStreamHeader", Modifier.Keyword.PROTECTED)
+        writeStreamHeaderMethod.addAnnotation(MarkerAnnotationExpr().setName("Override"))
+        writeStreamHeaderMethod.addThrownException(ClassOrInterfaceType("IOException"))
+        writeStreamHeaderMethod.isProtected = true
+        writeStreamHeaderMethod.setBody(BlockStmt().addStatement("reset();"))
+
+        this.addMember(innerAppendingOutStream)
     }
 
     private fun Expression.getType(): Type {

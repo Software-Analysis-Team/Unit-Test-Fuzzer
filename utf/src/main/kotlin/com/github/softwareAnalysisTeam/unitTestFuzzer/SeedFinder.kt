@@ -8,11 +8,10 @@ import com.github.javaparser.ast.stmt.ExpressionStmt
 
 internal class SeedFinder {
     companion object {
-        fun getSeeds(testingClassName: String, cu: CompilationUnit): Map<String, List<Expression>> {
-            val map = mutableMapOf<String, MutableList<Expression>>()
+        fun getSeeds(testingClassName: String, cu: CompilationUnit): Map<MethodDeclaration, List<Expression>> {
+            val map = mutableMapOf<MethodDeclaration, MutableList<Expression>>()
 
             cu.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
-                map[testMethodDeclaration.nameAsString] = mutableListOf()
                 testMethodDeclaration.walk(ExpressionStmt::class.java) { exprStmt ->
                     val expr = exprStmt.expression
 
@@ -45,6 +44,7 @@ internal class SeedFinder {
                     }
                 }
             }
+
             return map
         }
 
@@ -52,7 +52,7 @@ internal class SeedFinder {
             testingClassName: String,
             methodDeclaration: MethodDeclaration,
             methodCallExpr: MethodCallExpr,
-            map: MutableMap<String, MutableList<Expression>>
+            map: MutableMap<MethodDeclaration, MutableList<Expression>>
         ) {
             val methodCallExprString = methodCallExpr.toString()
             val className = testingClassName.split(".").last()
@@ -112,11 +112,16 @@ internal class SeedFinder {
         private fun collect(
             node: Node,
             testMethodDeclaration: MethodDeclaration,
-            map: MutableMap<String, MutableList<Expression>>
+            map: MutableMap<MethodDeclaration, MutableList<Expression>>
         ) {
             findValuesInArgument(node).also {
                 if (node !is NameExpr) {
-                    map[testMethodDeclaration.nameAsString]!!.add(it as Expression)
+                    if (map[testMethodDeclaration] != null) {
+                        map[testMethodDeclaration]!!.add(it as Expression)
+                    } else {
+                        map[testMethodDeclaration] = mutableListOf()
+                        map[testMethodDeclaration]!!.add(it as Expression)
+                    }
                 }
             }
         }
@@ -136,6 +141,7 @@ internal class SeedFinder {
                     }
                 }
             }
+
             return result
         }
     }
