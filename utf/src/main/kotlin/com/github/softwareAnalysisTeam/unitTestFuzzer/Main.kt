@@ -11,7 +11,7 @@ import java.io.File
 val logger: Logger = KotlinLogging.logger {}
 const val WRITING_BUDGET = 2
 const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 80
-const val GENERATION_PERCENTAGE = 2.5
+const val GENERATION_PERCENTAGE = 4
 
 fun main(args: Array<String>) {
 

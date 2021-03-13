@@ -26,24 +26,25 @@ class TestCreator {
             numberOfTest: Int,
             originalTest: CompilationUnit,
             testToConstruct: CompilationUnit,
-            placesForNewValues: Map<String, List<Expression>>,
+            placesForNewValues: Map<MethodDeclaration, List<Expression>>,
             generatedValues: Map<String, List<String>>,
             outputDir: String,
             cp: String
         ) {
+            val listWithModifiedTests: MutableList<MethodDeclaration> = mutableListOf()
+
             for (method in placesForNewValues.keys) {
-                // todo: fix duplication of tests that weren't fuzzed
-                val valuePlaces = placesForNewValues[method]!!
-                val values = generatedValues[method]
+                val valuePlaces = placesForNewValues[method]
+                val values = generatedValues[method.nameAsString]
 
-                for (i in valuePlaces.indices) {
+                if (values != null && valuePlaces != null) {
+                    val numberOfPlacesInMethod = valuePlaces.size
 
-                    // todo: add the same tests with another generated values
-                    if (values != null) {
-                        if (i < values.size)
-                            valuePlaces[i].replaceWithNewValue(values[i])
-                    } else {
-                        break;
+                    for (i in 0..(values.size - numberOfPlacesInMethod) step numberOfPlacesInMethod) {
+                        for (j in 0 until numberOfPlacesInMethod) {
+                            valuePlaces[j].replaceWithNewValue(values[i + j])
+                        }
+                        listWithModifiedTests.add(method.clone().setName("${method.name}_${i/numberOfPlacesInMethod}"))
                     }
                 }
             }
@@ -178,7 +179,7 @@ class TestCreator {
                                     assert.addArgument(NameExpr(variable.key))
 
                                     if (variable.value.asString().contains("double", true) ||
-                                        variable.value.asString().contains("long", true)
+                                        variable.value.asString().contains("float", true)
                                     ) {
                                         assert.addArgument("0.01")
                                     }
@@ -200,10 +201,8 @@ class TestCreator {
                 createdTestClassFile.createNewFile()
 
                 originalTest.walk(ClassOrInterfaceDeclaration::class.java) { testClass ->
-                    testToConstruct.walk(MethodDeclaration::class.java) {
-                        // todo: edit method renaming (must be changed in case of adding more than one modified test, 1:1 -> 1:n)
-                        it.setName(it.nameAsString + "Modified")
-                        testClass.addMember(it)
+                    for (newTest in listWithModifiedTests) {
+                        testClass.addMember(newTest)
                     }
                 }
 
