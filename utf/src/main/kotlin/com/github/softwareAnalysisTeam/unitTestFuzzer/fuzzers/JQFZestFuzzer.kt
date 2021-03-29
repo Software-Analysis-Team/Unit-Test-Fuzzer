@@ -32,6 +32,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
     override fun getValues(
         testingClassName: String,
+        packageName: String?,
         cu: CompilationUnit,
         seeds: Map<MethodDeclaration, List<Expression>>,
         budgetPerMethod: Double
@@ -52,7 +53,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         val fileForSaving = File(outputDir + File.separator + "$classForSavingName.java")
         fileForSaving.createNewFile()
 
-        val classForFuzzing = constructClassToFuzz(cu, seeds, classForFuzzingName)
+        val classForFuzzing = constructClassToFuzz(cu, seeds, classForFuzzingName, packageName)
         fileForFuzzing.writeText(classForFuzzing.toString())
 
         val classForSaving = constructClassForSaving(classForFuzzing)
@@ -70,15 +71,16 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
         val corpusFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "corpus")
         val failureFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "failures")
+        val packagePrefix = if (packageName != null) "$packageName." else ""
 
         try {
             seeds.keys.forEach { method ->
-                CommandExecutor.execute("$commandToRun $classForFuzzingName ${method.nameAsString}", outputDir)
+                CommandExecutor.execute("$commandToRun $packagePrefix$classForFuzzingName ${method.nameAsString}", outputDir)
                 if (Files.exists(corpusFuzzResultsPath)) {
                     Files.walk(corpusFuzzResultsPath).forEach { path ->
                         if (Files.isRegularFile(path)) {
                             CommandExecutor.execute(
-                                "$commandToRepr $classForSavingName ${method.nameAsString} $path",
+                                "$commandToRepr $packagePrefix$classForSavingName ${method.nameAsString} $path",
                                 outputDir, File("$fuzzResultsPath/logs")
                             )
                         }
@@ -197,9 +199,14 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
     private fun constructClassToFuzz(
         cu: CompilationUnit,
         seeds: Map<MethodDeclaration, List<Expression>>,
-        className: String
+        className: String,
+        packageName: String?
     ): CompilationUnit {
         val fileToFuzz = CompilationUnit()
+
+        if (packageName != null) {
+            fileToFuzz.setPackageDeclaration(packageName)
+        }
 
         addImports(fileToFuzz)
 

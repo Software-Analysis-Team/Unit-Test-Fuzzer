@@ -5,13 +5,13 @@ import com.github.softwareAnalysisTeam.unitTestFuzzer.TestGenerator
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class EvosuiteGenerator(private val evoSuiteJarLocation: String) : TestGenerator {
+class EvosuiteGenerator(private val evoSuiteJarLocation: String, private val cp: String) : TestGenerator {
 
     override fun getTests(testClassName: String, outputDir: String, timeout: Int): List<String> {
         val tests: MutableList<String> = mutableListOf()
 
         val defaultCommand =
-            "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $outputDir -Dsearch_budget=$timeout"
+            "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $cp -Dsearch_budget=$timeout"
 
         CommandExecutor.execute(defaultCommand, outputDir)
         val generatedTestsDir = Paths.get(outputDir, "evosuite-tests")

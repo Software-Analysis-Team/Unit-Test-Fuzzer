@@ -29,6 +29,7 @@ class TestCreator {
             placesForNewValues: Map<MethodDeclaration, List<Expression>>,
             generatedValues: Map<String, List<String>>,
             outputDir: String,
+            packageName: String?,
             cp: String
         ) {
             val listWithModifiedTests: MutableList<MethodDeclaration> = mutableListOf()
@@ -52,6 +53,10 @@ class TestCreator {
             val regressionClassName = "RegressionClass$numberOfTest"
             val createdTestsClassName = "RegressionTest$numberOfTest"
             val fileToRun = CompilationUnit()
+
+            if (packageName != null) {
+                fileToRun.setPackageDeclaration(packageName)
+            }
 
             fileToRun.addImport("java.util.*")
             fileToRun.addImport("java.io.*")
@@ -197,16 +202,18 @@ class TestCreator {
             }
 
             try {
-                val createdTestClassFile = File("$outputDir/$createdTestsClassName.java")
-                createdTestClassFile.createNewFile()
-
                 originalTest.walk(ClassOrInterfaceDeclaration::class.java) { testClass ->
+                    val createdTestClassFile = File("$outputDir/${testClass.name}.java")
+                    createdTestClassFile.createNewFile()
+
                     for (newTest in listWithModifiedTests) {
                         testClass.addMember(newTest)
                     }
-                }
 
-                createdTestClassFile.writeText(originalTest.toString())
+                    logger.debug(listWithModifiedTests.toString())
+
+                    createdTestClassFile.writeText(originalTest.toString())
+                }
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
