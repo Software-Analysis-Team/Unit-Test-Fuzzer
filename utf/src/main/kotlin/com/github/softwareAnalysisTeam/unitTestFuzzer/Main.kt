@@ -1,6 +1,10 @@
 package com.github.softwareAnalysisTeam.unitTestFuzzer
 
 import com.github.javaparser.StaticJavaParser
+import com.github.javaparser.ast.CompilationUnit
+import com.github.javaparser.ast.ImportDeclaration
+import com.github.javaparser.ast.Modifier
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.softwareAnalysisTeam.unitTestFuzzer.fuzzers.JQFZestFuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.EvosuiteGenerator
@@ -13,10 +17,9 @@ import java.lang.Exception
 val logger: Logger = KotlinLogging.logger {}
 const val WRITING_BUDGET = 2
 const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 80
-const val GENERATION_PERCENTAGE = 3
+const val GENERATION_PERCENTAGE = 10
 
 fun main(args: Array<String>) {
-
     val className = args[0]
     val timeBudget = args[1]
     val outputDirPath = File(args[2]).absolutePath.toString()
@@ -45,63 +48,96 @@ fun main(args: Array<String>) {
     val generationBudget = externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
     val fuzzingBudget = externalInstrumentsBudget - generationBudget
 
-    var generator: TestGenerator? = null
-    when (generatorName) {
-        "randoop" -> generator = RandoopGenerator("$cp:$generatorJar")
-        "evosuite" -> generator = EvosuiteGenerator(generatorJar, cp)
-    }
-    if (generator == null) {
-        throw Exception("Failed to initialise generator $generatorName")
+    val generator: TestGenerator?
+    generator = when (generatorName) {
+        "randoop" -> RandoopGenerator("$cp:$generatorJar")
+        "evosuite" -> EvosuiteGenerator(generatorJar, cp)
+        else -> throw Exception("Unknown generator $generatorName")
     }
 
-    val tests = generator.getTests(className, outputDirPath, 2)//generationBudget.toInt())
+    val tests = generator.getTests(className, outputDirPath, generationBudget.toInt())
+    if (tests.isEmpty()) throw Exception("Generator $generatorName produced no tests to fuzz")
 
-    var totalMethodCount = 0
-    // todo: count number of methods in the same loop?
+    val parsedTests: MutableList<CompilationUnit> = mutableListOf()
+    val allMethods: MutableList<MethodDeclaration> = mutableListOf()
+
     for (i in tests.indices) {
         val parsedTest = StaticJavaParser.parse(tests[i])
+        parsedTests.add(parsedTest)
 
-        // todo: make a method that will do the same in one walk?
-        parsedTest.removeTryCatchBlocks()
         parsedTest.walk(MethodDeclaration::class.java) {
-            totalMethodCount++;
+            allMethods.add(it.setName("${it.name}ofFile$i"))
         }
     }
 
-    val fuzzingBudgetPerMethod = fuzzingBudget / totalMethodCount.toFloat()
+    var fuzzingBudgetPerMethod = 5.0
+    val numberOfMethodToFuzz = fuzzingBudget / fuzzingBudgetPerMethod
+    val methodsToFuzz: List<MethodDeclaration>
 
-    for (i in tests.indices) {
-        val parsedTest = StaticJavaParser.parse(tests[i])
+    val classOfAllMethods = constructClassOfMethods(allMethods, parsedTests)
 
-        val testToFuzz = parsedTest.clone()
-        testToFuzz.removeTryCatchBlocks()
-        testToFuzz.removeAsserts()
+    if (numberOfMethodToFuzz > allMethods.size) {
+        methodsToFuzz = allMethods
+        fuzzingBudgetPerMethod = fuzzingBudget / allMethods.size.toFloat()
+    } else {
+        allMethods.shuffle()
+        methodsToFuzz = allMethods.take(numberOfMethodToFuzz.toInt())
+    }
 
-        val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
-        if (placesToFuzz.isNotEmpty()) {
-            val generatedValues =
-                JQFZestFuzzer(outputDirWithPackage, cp, JQFDir).getValues(
-                    className,
-                    packageName,
-                    testToFuzz,
-                    placesToFuzz,
-                    fuzzingBudgetPerMethod
-                )
+    val classOfMethodsToFuzz = constructClassOfMethods(methodsToFuzz, parsedTests)
+    val testToFuzz = classOfMethodsToFuzz.clone()
+    testToFuzz.removeTryCatchBlocks()
+    testToFuzz.removeAsserts()
 
-            val testToConstruct = parsedTest.clone()
-            testToConstruct.removeTryCatchBlocks()
-            val placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
-
-            TestCreator.createTest(
-                i,
-                parsedTest,
-                testToConstruct,
-                placesForNewValues,
-                generatedValues,
-                outputDirWithPackage,
+    val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
+    if (placesToFuzz.isNotEmpty()) {
+        val generatedValues =
+            JQFZestFuzzer(outputDirWithPackage, cp, JQFDir).getValues(
+                className,
                 packageName,
-                cp
+                testToFuzz,
+                placesToFuzz,
+                fuzzingBudgetPerMethod
             )
+
+        val testToConstruct = classOfMethodsToFuzz.clone()
+        testToConstruct.removeTryCatchBlocks()
+        val placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
+
+        TestCreator.createTest(
+            classOfAllMethods,
+            testToConstruct,
+            placesForNewValues,
+            generatedValues,
+            outputDirWithPackage,
+            packageName,
+            cp
+        )
+    }
+}
+
+fun constructClassOfMethods(methods: List<MethodDeclaration>, originalTests: List<CompilationUnit>): CompilationUnit {
+    val cu = CompilationUnit()
+    val createdClass = cu.addClass("RegressionTests", Modifier.Keyword.PUBLIC)
+
+    // toDo: clean it
+    originalTests.forEach {
+        it.walk(ClassOrInterfaceDeclaration::class.java) { classOrInterfaceDeclaration ->
+            for (member in classOrInterfaceDeclaration.members) {
+                if (!member.isMethodDeclaration) {
+                    createdClass.addMember(member)
+                }
+            }
+
+            classOrInterfaceDeclaration.walk(ImportDeclaration::class.java) {
+                cu.addImport(it)
+            }
         }
     }
+
+    for (method in methods) {
+        createdClass.addMember(method)
+    }
+
+    return cu
 }

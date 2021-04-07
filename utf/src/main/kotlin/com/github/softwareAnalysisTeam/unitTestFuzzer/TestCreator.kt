@@ -23,7 +23,6 @@ import java.io.ObjectInputStream
 class TestCreator {
     companion object {
         fun createTest(
-            numberOfTest: Int,
             originalTest: CompilationUnit,
             testToConstruct: CompilationUnit,
             placesForNewValues: Map<MethodDeclaration, List<Expression>>,
@@ -50,8 +49,8 @@ class TestCreator {
                 }
             }
 
-            val regressionClassName = "RegressionClass$numberOfTest"
-            val createdTestsClassName = "RegressionTest$numberOfTest"
+            val regressionClassName = "RegressionClass"
+            val createdTestsClassName = "RegressionTest"
             val fileToRun = CompilationUnit()
 
             if (packageName != null) {
