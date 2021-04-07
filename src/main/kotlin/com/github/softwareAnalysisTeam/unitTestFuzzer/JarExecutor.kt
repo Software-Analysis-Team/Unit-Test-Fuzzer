@@ -21,6 +21,7 @@ class JarExecutor {
         try {
             processBuilder.command(commandList)
             val process = processBuilder.start()
+            println("Start running process")
             process.waitFor()
             val exitValue = process.exitValue()
             if (exitValue != 0) {
@@ -28,6 +29,11 @@ class JarExecutor {
                 val errorInfo = BufferedReader(InputStreamReader(errorStream)).lines()
                         .parallel().collect(Collectors.joining("\n"))
                 println(errorInfo)
+            } else {
+                val stream = process.inputStream
+                val info = BufferedReader(InputStreamReader(stream)).lines()
+                        .parallel().collect(Collectors.joining("\n"))
+                println(info)
             }
         } catch (e: Exception) {
             println(e.message)
