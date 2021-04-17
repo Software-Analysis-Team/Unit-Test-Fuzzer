@@ -11,7 +11,7 @@ class RandoopGenerator(
     private val cp: String
 ) : TestGenerator {
 
-    override fun getTests(testClassName: String, outputDir: String, timeout: Int): List<String> {
+    override fun getTests(testClassName: String, outputDir: String, timeout: Int, testPackageName: String?): List<String> {
         val tests: MutableList<String> = mutableListOf()
         var generatedTestsDir: File? = null
         try {
@@ -20,8 +20,14 @@ class RandoopGenerator(
                 generatedTestsDir.mkdir()
             }
 
-            val defaultCommand =
-                "java -classpath $cp randoop.main.Main gentests --testclass=$testClassName --time-limit=$timeout"
+            var defaultCommand =
+                "java -classpath $cp randoop.main.Main gentests " +
+                        "--testclass=$testClassName " +
+                        "--time-limit=$timeout"
+
+            if (testPackageName != null) {
+                defaultCommand += " --junit-package-name=$testPackageName"
+            }
 
             CommandExecutor.execute(defaultCommand, generatedTestsDir.toString())
 

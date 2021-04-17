@@ -32,172 +32,182 @@ class TestCreator {
             cp: String
         ) {
             val listWithModifiedTests: MutableList<MethodDeclaration> = mutableListOf()
+            if (generatedValues.isNotEmpty()) {
+                for (method in placesForNewValues.keys) {
+                    val valuePlaces = placesForNewValues[method]
+                    val values = generatedValues[method.nameAsString]
 
-            for (method in placesForNewValues.keys) {
-                val valuePlaces = placesForNewValues[method]
-                val values = generatedValues[method.nameAsString]
+                    if (values != null && valuePlaces != null) {
+                        val numberOfPlacesInMethod = valuePlaces.size
 
-                if (values != null && valuePlaces != null) {
-                    val numberOfPlacesInMethod = valuePlaces.size
-
-                    for (i in 0..(values.size - numberOfPlacesInMethod) step numberOfPlacesInMethod) {
-                        for (j in 0 until numberOfPlacesInMethod) {
-                            valuePlaces[j].replaceWithNewValue(values[i + j])
-                        }
-                        listWithModifiedTests.add(method.clone().setName("${method.name}_${i/numberOfPlacesInMethod}"))
-                    }
-                }
-            }
-
-            val regressionClassName = "RegressionClass"
-            val createdTestsClassName = "RegressionTest"
-            val fileToRun = CompilationUnit()
-
-            if (packageName != null) {
-                fileToRun.setPackageDeclaration(packageName)
-            }
-
-            fileToRun.addImport("java.util.*")
-            fileToRun.addImport("java.io.*")
-
-            val classToRun = fileToRun.addClass(regressionClassName, Modifier.Keyword.PUBLIC)
-
-            testToConstruct.walk(FieldDeclaration::class.java) {
-                classToRun.addMember(it)
-            }
-
-            val methods = mutableListOf<String>()
-            testToConstruct.walk(MethodDeclaration::class.java) {
-                val methodToAdd = it.clone()
-                methodToAdd.addModifier(Modifier.Keyword.STATIC)
-                methodToAdd.addParameter(Parameter(ClassOrInterfaceType("ObjectOutputStream"), "objectOutputStream"))
-
-                classToRun.addMember(methodToAdd)
-                methods.add(it.nameAsString)
-            }
-
-            fileToRun.removeAsserts()
-
-            fileToRun.walk(AnnotationExpr::class.java) {
-                it.removeForced()
-            }
-
-            val regressionValuesFilePath = "$outputDir/regressionValues"
-            classToRun.addMember(FieldDeclaration())
-
-            val mapOfMethodVariables = mutableMapOf<String, MutableMap<String, Type>>()
-
-            fileToRun.walk(MethodDeclaration::class.java) { methodDecl ->
-                val currentMap = mutableMapOf<String, Type>()
-                mapOfMethodVariables[methodDecl.nameAsString] = currentMap
-                methodDecl.walk(VariableDeclarationExpr::class.java) { varDecl ->
-                    varDecl.variables.forEach {
-                        if (it.type.isPrimitiveType || it.typeAsString == "String") {
-                            currentMap[it.nameAsString] = it.type
+                        for (i in 0..(values.size - numberOfPlacesInMethod) step numberOfPlacesInMethod) {
+                            for (j in 0 until numberOfPlacesInMethod) {
+                                valuePlaces[j].replaceWithNewValue(values[i + j])
+                            }
+                            listWithModifiedTests.add(
+                                method.clone().setName("${method.name}_${i / numberOfPlacesInMethod}")
+                            )
                         }
                     }
                 }
 
-                if (methodDecl.body.isPresent) {
-                    val methodBody = methodDecl.body.get()
+                val regressionClassName = "RegressionClass"
+                val createdTestsClassName = "RegressionTest"
+                val fileToRun = CompilationUnit()
 
-                    val tryStmt = TryStmt()
-                    val blockStmt = BlockStmt()
+                if (packageName != null) {
+                    fileToRun.setPackageDeclaration(packageName)
+                }
 
-                    for (variableName in currentMap.keys) {
-                        blockStmt.addStatement("objectOutputStream.writeObject(${variableName});")
+                fileToRun.addImport("java.util.*")
+                fileToRun.addImport("java.io.*")
+
+                val classToRun = fileToRun.addClass(regressionClassName, Modifier.Keyword.PUBLIC)
+
+                testToConstruct.walk(FieldDeclaration::class.java) {
+                    classToRun.addMember(it)
+                }
+
+                val methods = mutableListOf<String>()
+                testToConstruct.walk(MethodDeclaration::class.java) {
+                    val methodToAdd = it.clone()
+                    methodToAdd.addModifier(Modifier.Keyword.STATIC)
+                    methodToAdd.addParameter(
+                        Parameter(
+                            ClassOrInterfaceType("ObjectOutputStream"),
+                            "objectOutputStream"
+                        )
+                    )
+
+                    classToRun.addMember(methodToAdd)
+                    methods.add(it.nameAsString)
+                }
+
+                fileToRun.removeAsserts()
+
+                fileToRun.walk(AnnotationExpr::class.java) {
+                    it.removeForced()
+                }
+
+                val regressionValuesFilePath = "$outputDir/regressionValues"
+                classToRun.addMember(FieldDeclaration())
+
+                val mapOfMethodVariables = mutableMapOf<String, MutableMap<String, Type>>()
+
+                fileToRun.walk(MethodDeclaration::class.java) { methodDecl ->
+                    val currentMap = mutableMapOf<String, Type>()
+                    mapOfMethodVariables[methodDecl.nameAsString] = currentMap
+                    methodDecl.walk(VariableDeclarationExpr::class.java) { varDecl ->
+                        varDecl.variables.forEach {
+                            if (it.type.isPrimitiveType || it.typeAsString == "String") {
+                                currentMap[it.nameAsString] = it.type
+                            }
+                        }
                     }
 
-                    tryStmt.tryBlock = blockStmt
-                    val catchClause = CatchClause()
-                    val parameter = Parameter()
-                    parameter.setName("e")
-                    parameter.type = ClassOrInterfaceType("Exception")
-                    catchClause.parameter = parameter
-                    val catchStmt = BlockStmt()
-                    catchStmt.addStatement(StaticJavaParser.parseStatement("System.out.println(\"Exception\");"))
-                    catchClause.body = catchStmt
-                    val stmts: NodeList<CatchClause> = NodeList()
-                    stmts.add(catchClause)
-                    tryStmt.catchClauses = stmts
+                    if (methodDecl.body.isPresent) {
+                        val methodBody = methodDecl.body.get()
 
-                    methodBody.addStatement(tryStmt)
+                        val tryStmt = TryStmt()
+                        val blockStmt = BlockStmt()
+
+                        for (variableName in currentMap.keys) {
+                            blockStmt.addStatement("objectOutputStream.writeObject(${variableName});")
+                        }
+
+                        tryStmt.tryBlock = blockStmt
+                        val catchClause = CatchClause()
+                        val parameter = Parameter()
+                        parameter.setName("e")
+                        parameter.type = ClassOrInterfaceType("Exception")
+                        catchClause.parameter = parameter
+                        val catchStmt = BlockStmt()
+                        catchStmt.addStatement(StaticJavaParser.parseStatement("System.out.println(\"Exception\");"))
+                        catchClause.body = catchStmt
+                        val stmts: NodeList<CatchClause> = NodeList()
+                        stmts.add(catchClause)
+                        tryStmt.catchClauses = stmts
+
+                        methodBody.addStatement(tryStmt)
+                    }
                 }
-            }
 
-            val mainMethod = classToRun.addMethod("main", Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC)
-            mainMethod.addParameter(Parameter(ArrayType(ClassOrInterfaceType("String")), "args"))
-            mainMethod.addThrownException(ClassOrInterfaceType("Throwable"))
-            val mainBody = mainMethod.createBody()
+                val mainMethod = classToRun.addMethod("main", Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC)
+                mainMethod.addParameter(Parameter(ArrayType(ClassOrInterfaceType("String")), "args"))
+                mainMethod.addThrownException(ClassOrInterfaceType("Throwable"))
+                val mainBody = mainMethod.createBody()
 
-            mainBody.addStatement("File file = new File(\"$regressionValuesFilePath\");")
-            mainBody.addStatement("file.createNewFile();")
-            mainBody.addStatement("OutputStream fileOutputStream = new FileOutputStream(file, true);")
-            mainBody.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
+                mainBody.addStatement("File file = new File(\"$regressionValuesFilePath\");")
+                mainBody.addStatement("file.createNewFile();")
+                mainBody.addStatement("OutputStream fileOutputStream = new FileOutputStream(file, true);")
+                mainBody.addStatement("ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);")
 
-            for (method in methods) {
-                mainBody.addStatement("$method(objectOutputStream);")
-            }
+                for (method in methods) {
+                    mainBody.addStatement("$method(objectOutputStream);")
+                }
 
-            mainBody.addStatement("objectOutputStream.close();")
-            mainBody.addStatement("fileOutputStream.close();")
+                mainBody.addStatement("objectOutputStream.close();")
+                mainBody.addStatement("fileOutputStream.close();")
 
-            var fileForClassToRun: File? = null
-            try {
-                fileForClassToRun = File("$outputDir/$regressionClassName.java")
-                fileForClassToRun.createNewFile()
-                fileForClassToRun.writeText(fileToRun.toString())
-            } catch (e: Exception) {
-                logger.error(e.stackTraceToString())
-            }
+                var fileForClassToRun: File? = null
+                try {
+                    fileForClassToRun = File("$outputDir/$regressionClassName.java")
+                    fileForClassToRun.createNewFile()
+                    fileForClassToRun.writeText(fileToRun.toString())
+                } catch (e: Exception) {
+                    logger.error(e.stackTraceToString())
+                }
 
-            CommandExecutor.execute("javac -encoding UTF-8 -classpath $cp $fileForClassToRun", outputDir)
-            CommandExecutor.execute("java -classpath $cp $regressionClassName", outputDir)
+                CommandExecutor.execute("javac -encoding UTF-8 -classpath $cp $fileForClassToRun", outputDir)
+                CommandExecutor.execute("java -classpath $cp $regressionClassName", outputDir)
 
-            try {
-                fileForClassToRun?.delete()
-                File("$outputDir/$regressionClassName.class").delete()
-            } catch (e: IOException) {
-                logger.error(e.stackTraceToString())
-            }
+                try {
+                    fileForClassToRun?.delete()
+                    File("$outputDir/$regressionClassName.class").delete()
+                } catch (e: IOException) {
+                    logger.error(e.stackTraceToString())
+                }
 
-            val regressionValuesFile = File(regressionValuesFilePath)
+                val regressionValuesFile = File(regressionValuesFilePath)
 
-            var fileInputStream: FileInputStream? = null
-            var objectInputStream: ObjectInputStream? = null
+                var fileInputStream: FileInputStream? = null
+                var objectInputStream: ObjectInputStream? = null
 
-            try {
-                fileInputStream =
-                    FileInputStream(regressionValuesFile)
-                objectInputStream = ObjectInputStream(fileInputStream)
+                try {
+                    fileInputStream =
+                        FileInputStream(regressionValuesFile)
+                    objectInputStream = ObjectInputStream(fileInputStream)
 
-                val asserts = testToConstruct.collectAsserts()
-                for (method in asserts.keys) {
-                    if (!mapOfMethodVariables[method].isNullOrEmpty() && !asserts[method].isNullOrEmpty()) {
-                        for (variable in mapOfMethodVariables[method]!!) {
-                            asserts[method]!!.forEach { assert ->
-                                if (assert.toString().contains(variable.key)) {
-                                    assert.setName("assertEquals")
-                                    assert.arguments.clear()
-                                    assert.addArgument(NameExpr(objectInputStream.readObject().toString()))
-                                    assert.addArgument(NameExpr(variable.key))
+                    val asserts = testToConstruct.collectAsserts()
+                    for (method in asserts.keys) {
+                        if (!mapOfMethodVariables[method].isNullOrEmpty() && !asserts[method].isNullOrEmpty()) {
+                            for (variable in mapOfMethodVariables[method]!!) {
+                                asserts[method]!!.forEach { assert ->
+                                    if (assert.toString().contains(variable.key)) {
+                                        assert.setName("assertEquals")
+                                        assert.arguments.clear()
+                                        assert.addArgument(NameExpr(objectInputStream.readObject().toString()))
+                                        assert.addArgument(NameExpr(variable.key))
 
-                                    if (variable.value.asString().contains("double", true) ||
-                                        variable.value.asString().contains("float", true)
-                                    ) {
-                                        assert.addArgument("0.01")
+                                        if (variable.value.asString().contains("double", true) ||
+                                            variable.value.asString().contains("float", true)
+                                        ) {
+                                            assert.addArgument("0.01")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    logger.error(e.stackTraceToString())
+                } finally {
+                    objectInputStream?.close()
+                    fileInputStream?.close()
+                    regressionValuesFile.delete()
                 }
-            } catch (e: Exception) {
-                logger.error(e.stackTraceToString())
-            } finally {
-                objectInputStream?.close()
-                fileInputStream?.close()
-                regressionValuesFile.delete()
+            } else {
+                logger.debug("No values were generated by fuzzer")
             }
 
             try {
@@ -209,7 +219,7 @@ class TestCreator {
                         testClass.addMember(newTest)
                     }
 
-                    logger.debug(listWithModifiedTests.toString())
+                    logger.debug("New tests created\n: $listWithModifiedTests")
 
                     createdTestClassFile.writeText(originalTest.toString())
                 }

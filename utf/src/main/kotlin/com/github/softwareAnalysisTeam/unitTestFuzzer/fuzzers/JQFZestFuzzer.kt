@@ -75,7 +75,10 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
         try {
             seeds.keys.forEach { method ->
-                CommandExecutor.execute("$commandToRun $packagePrefix$classForFuzzingName ${method.nameAsString}", outputDir)
+                CommandExecutor.execute(
+                    "$commandToRun $packagePrefix$classForFuzzingName ${method.nameAsString}",
+                    outputDir
+                )
                 if (Files.exists(corpusFuzzResultsPath)) {
                     Files.walk(corpusFuzzResultsPath).forEach { path ->
                         if (Files.isRegularFile(path)) {
@@ -258,6 +261,8 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         }
 
         this.addAnnotation(methodAnnotation)
+        this.thrownExceptions = testMethod.thrownExceptions
+
         if (testMethod.body.isPresent) {
             this.setBody(testMethod.body.get())
         }

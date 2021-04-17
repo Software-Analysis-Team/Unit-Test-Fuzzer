@@ -26,7 +26,7 @@ internal class SeedFinder {
                                         }
                                     }
                                 }
-                                // do we need it?
+
                                 initializer.ifMethodCallExpr { methodCallExpr ->
                                     findAndCollectValuesInMethod(
                                         testingClassName,
@@ -58,7 +58,6 @@ internal class SeedFinder {
             val className = testingClassName.split(".").last()
             val implicitArgType = findImplicitArgTypeName(methodDeclaration, methodCallExprString)
 
-            // todo: check if it works with all cases
             if (methodCallExprString.startsWith("$testingClassName.") ||
                 methodCallExprString.startsWith("$className.") ||
                 implicitArgType == testingClassName ||
@@ -71,41 +70,12 @@ internal class SeedFinder {
         }
 
 
-        private fun findValuesInArgument(node: Node): Node {
+        private fun findValueInArgument(node: Node): Node {
             val nodes = node.childNodes
 
             if (nodes.isNotEmpty()) {
-                val curExpr = node as Expression
-
-                // unbox digits from UnaryExpr
-                // suppose, we have only unary minus as operator
-                if (curExpr.isUnaryExpr && (curExpr.asUnaryExpr().operator == UnaryExpr.Operator.MINUS)) {
-                    if (curExpr.childNodes.size == 1) {
-                        return when (val boxedValue = curExpr.childNodes[0]) {
-                            is IntegerLiteralExpr -> {
-                                val unboxedIntExpr = IntegerLiteralExpr().setInt(-boxedValue.asInt())
-                                node.replace(unboxedIntExpr)
-                                unboxedIntExpr
-                            }
-                            is LongLiteralExpr -> {
-                                val unboxedLongExpr = LongLiteralExpr().setLong(-boxedValue.asLong())
-                                node.replace(unboxedLongExpr)
-                                unboxedLongExpr
-                            }
-                            is DoubleLiteralExpr -> {
-                                val unboxedLongExpr = DoubleLiteralExpr().setDouble(-boxedValue.asDouble())
-                                node.replace(unboxedLongExpr)
-                                unboxedLongExpr
-                            }
-                            else -> throw Exception("Used non-digital value with unary minus")
-                        }
-                    }
-                    return node
-                }
-
-                return findValuesInArgument(nodes.last() as Node)
+                return findValueInArgument(nodes.last() as Node)
             }
-
             return node
         }
 
@@ -114,13 +84,14 @@ internal class SeedFinder {
             testMethodDeclaration: MethodDeclaration,
             map: MutableMap<MethodDeclaration, MutableList<Expression>>
         ) {
-            findValuesInArgument(node).also {
-                if (node !is NameExpr) {
+
+            findValueInArgument(node).also {
+                if (node !is NameExpr && it is Expression) {
                     if (map[testMethodDeclaration] != null) {
-                        map[testMethodDeclaration]!!.add(it as Expression)
+                        map[testMethodDeclaration]!!.add(it)
                     } else {
                         map[testMethodDeclaration] = mutableListOf()
-                        map[testMethodDeclaration]!!.add(it as Expression)
+                        map[testMethodDeclaration]!!.add(it)
                     }
                 }
             }
@@ -132,7 +103,6 @@ internal class SeedFinder {
         ): String {
             var result = ""
 
-            // suppose all needed declarations are in current test method
             methodDeclaration.walk(VariableDeclarationExpr::class.java) { variableDeclarationExpr ->
                 val variableName = methodCallExprString.split(".")[0]
                 variableDeclarationExpr.variables.forEach {
