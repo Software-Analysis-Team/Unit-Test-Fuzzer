@@ -6,6 +6,7 @@ import com.github.javaparser.ast.ImportDeclaration
 import com.github.javaparser.ast.Modifier
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.MethodDeclaration
+import com.github.javaparser.ast.expr.Expression
 import com.github.softwareAnalysisTeam.unitTestFuzzer.fuzzers.JQFZestFuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.EvosuiteGenerator
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.RandoopGenerator
@@ -16,7 +17,7 @@ import java.lang.Exception
 
 val logger: Logger = KotlinLogging.logger {}
 const val WRITING_BUDGET = 2
-const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 80
+const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 70
 const val GENERATION_PERCENTAGE = 10
 
 fun main(args: Array<String>) {
@@ -30,6 +31,8 @@ fun main(args: Array<String>) {
 
     val splitClassName = className.split(".")
     val simpleClassName = splitClassName.last()
+
+    // todo: set test package Name as argument
     var packageName: String? = null
     if (splitClassName.size > 1) {
         packageName = className.removeSuffix(".$simpleClassName")
@@ -45,7 +48,7 @@ fun main(args: Array<String>) {
 
     val totalBudget = timeBudget.toLong() - WRITING_BUDGET
     val externalInstrumentsBudget = totalBudget / 100.0 * EXTERNAL_INSTRUMENTS_PERCENTAGE
-    val generationBudget = externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
+    val generationBudget = 3//externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
     val fuzzingBudget = externalInstrumentsBudget - generationBudget
 
     val generator: TestGenerator?
@@ -55,7 +58,7 @@ fun main(args: Array<String>) {
         else -> throw Exception("Unknown generator $generatorName")
     }
 
-    val tests = generator.getTests(className, outputDirPath, generationBudget.toInt())
+    val tests = generator.getTests(className, outputDirPath, generationBudget.toInt(), packageName)
     if (tests.isEmpty()) throw Exception("Generator $generatorName produced no tests to fuzz")
 
     val parsedTests: MutableList<CompilationUnit> = mutableListOf()
@@ -75,13 +78,16 @@ fun main(args: Array<String>) {
     val methodsToFuzz: List<MethodDeclaration>
 
     val classOfAllMethods = constructClassOfMethods(allMethods, parsedTests)
+    val allMethodsSeeds = SeedFinder.getSeeds(className, classOfAllMethods)
 
-    if (numberOfMethodToFuzz > allMethods.size) {
-        methodsToFuzz = allMethods
+    val methodsWithSeeds = allMethodsSeeds.keys.toList()
+
+    if (numberOfMethodToFuzz > methodsWithSeeds.size) {
+        methodsToFuzz = methodsWithSeeds
         fuzzingBudgetPerMethod = fuzzingBudget / allMethods.size.toFloat()
     } else {
         allMethods.shuffle()
-        methodsToFuzz = allMethods.take(numberOfMethodToFuzz.toInt())
+        methodsToFuzz = methodsWithSeeds.take(numberOfMethodToFuzz.toInt())
     }
 
     val classOfMethodsToFuzz = constructClassOfMethods(methodsToFuzz, parsedTests)
@@ -90,8 +96,14 @@ fun main(args: Array<String>) {
     testToFuzz.removeAsserts()
 
     val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
+
+    var generatedValues: Map<String, List<String>> = mapOf()
+    var placesForNewValues: Map<MethodDeclaration, List<Expression>> = mapOf()
+    val testToConstruct = classOfMethodsToFuzz.clone()
+
     if (placesToFuzz.isNotEmpty()) {
-        val generatedValues =
+        logger.debug("Chosen places to fuzz\n: $placesToFuzz")
+        generatedValues =
             JQFZestFuzzer(outputDirWithPackage, cp, JQFDir).getValues(
                 className,
                 packageName,
@@ -100,31 +112,31 @@ fun main(args: Array<String>) {
                 fuzzingBudgetPerMethod
             )
 
-        val testToConstruct = classOfMethodsToFuzz.clone()
         testToConstruct.removeTryCatchBlocks()
-        val placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
-
-        TestCreator.createTest(
-            classOfAllMethods,
-            testToConstruct,
-            placesForNewValues,
-            generatedValues,
-            outputDirWithPackage,
-            packageName,
-            cp
-        )
+        placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
+    } else {
+        logger.debug("No places to fuzz were found")
     }
+
+    TestCreator.createTest(
+        classOfAllMethods,
+        testToConstruct,
+        placesForNewValues,
+        generatedValues,
+        outputDirWithPackage,
+        packageName,
+        cp
+    )
 }
 
 fun constructClassOfMethods(methods: List<MethodDeclaration>, originalTests: List<CompilationUnit>): CompilationUnit {
     val cu = CompilationUnit()
     val createdClass = cu.addClass("RegressionTests", Modifier.Keyword.PUBLIC)
 
-    // toDo: clean it
-    originalTests.forEach {
-        it.walk(ClassOrInterfaceDeclaration::class.java) { classOrInterfaceDeclaration ->
+    originalTests.forEach { compilationUnit ->
+        compilationUnit.walk(ClassOrInterfaceDeclaration::class.java) { classOrInterfaceDeclaration ->
             for (member in classOrInterfaceDeclaration.members) {
-                if (!member.isMethodDeclaration) {
+                if (!member.isMethodDeclaration && !createdClass.members.contains(member)) {
                     createdClass.addMember(member)
                 }
             }

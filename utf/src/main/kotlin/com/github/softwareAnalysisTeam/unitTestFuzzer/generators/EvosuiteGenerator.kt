@@ -7,9 +7,15 @@ import java.nio.file.Paths
 
 class EvosuiteGenerator(private val evoSuiteJarLocation: String, private val cp: String) : TestGenerator {
 
-    override fun getTests(testClassName: String, outputDir: String, timeout: Int): List<String> {
+    override fun getTests(
+        testClassName: String,
+        outputDir: String,
+        timeout: Int,
+        testPackageName: String?
+    ): List<String> {
         val tests: MutableList<String> = mutableListOf()
 
+        // todo: add package name
         val defaultCommand =
             "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $cp -Dsearch_budget=$timeout"
 
