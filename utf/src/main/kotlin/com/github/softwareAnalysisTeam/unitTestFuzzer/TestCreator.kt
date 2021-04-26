@@ -4,7 +4,6 @@ import com.github.javaparser.StaticJavaParser
 import com.github.javaparser.ast.CompilationUnit
 import com.github.javaparser.ast.Modifier
 import com.github.javaparser.ast.NodeList
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.FieldDeclaration
 import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.body.Parameter
@@ -29,7 +28,8 @@ class TestCreator {
             generatedValues: Map<String, List<String>>,
             outputDir: String,
             packageName: String?,
-            cp: String
+            cp: String,
+            index: Int
         ) {
             val listWithModifiedTests: MutableList<MethodDeclaration> = mutableListOf()
             if (generatedValues.isNotEmpty()) {
@@ -52,7 +52,7 @@ class TestCreator {
                 }
 
                 val regressionClassName = "RegressionClass"
-                val createdTestsClassName = "RegressionTest"
+//                val createdTestsClassName = "RegressionTest"
                 val fileToRun = CompilationUnit()
 
                 if (packageName != null) {
@@ -211,18 +211,25 @@ class TestCreator {
             }
 
             try {
-                originalTest.walk(ClassOrInterfaceDeclaration::class.java) { testClass ->
-                    val createdTestClassFile = File("$outputDir/${testClass.name}.java")
-                    createdTestClassFile.createNewFile()
+                val modifiedTest = CompilationUnit()
+                val modifiedTestClass = modifiedTest.addClass("modifiedTest$index", Modifier.Keyword.PUBLIC)
 
-                    for (newTest in listWithModifiedTests) {
-                        testClass.addMember(newTest)
-                    }
-
-                    logger.debug("New tests created\n: $listWithModifiedTests")
-
-                    createdTestClassFile.writeText(originalTest.toString())
+                if (packageName != null) {
+                    modifiedTest.setPackageDeclaration(packageName)
                 }
+
+                modifiedTest.imports = originalTest.imports
+                val createdTestClassFile = File("$outputDir/${modifiedTestClass.name}.java")
+                createdTestClassFile.createNewFile()
+
+
+                for (newTest in listWithModifiedTests) {
+                    modifiedTestClass.addMember(newTest)
+                }
+
+                logger.debug("New tests created\n: $listWithModifiedTests")
+
+                createdTestClassFile.writeText(modifiedTest.toString())
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
