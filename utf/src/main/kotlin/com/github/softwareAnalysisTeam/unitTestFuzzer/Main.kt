@@ -19,6 +19,7 @@ val logger: Logger = KotlinLogging.logger {}
 const val WRITING_BUDGET = 2
 const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 70
 const val GENERATION_PERCENTAGE = 10
+const val FUZZING_METHODS_PER_FILE = 20
 
 fun main(args: Array<String>) {
     val className = args[0]
@@ -48,7 +49,7 @@ fun main(args: Array<String>) {
 
     val totalBudget = timeBudget.toLong() - WRITING_BUDGET
     val externalInstrumentsBudget = totalBudget / 100.0 * EXTERNAL_INSTRUMENTS_PERCENTAGE
-    val generationBudget = 3//externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
+    val generationBudget = 8 //externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
     val fuzzingBudget = externalInstrumentsBudget - generationBudget
 
     val generator: TestGenerator?
@@ -80,53 +81,77 @@ fun main(args: Array<String>) {
     val classOfAllMethods = constructClassOfMethods(allMethods, parsedTests)
     val allMethodsSeeds = SeedFinder.getSeeds(className, classOfAllMethods)
 
-    val methodsWithSeeds = allMethodsSeeds.keys.toList()
+    val methodsWithSeeds = allMethodsSeeds.keys.toMutableList()
 
     if (numberOfMethodToFuzz > methodsWithSeeds.size) {
         methodsToFuzz = methodsWithSeeds
         fuzzingBudgetPerMethod = fuzzingBudget / allMethods.size.toFloat()
     } else {
-        allMethods.shuffle()
+        methodsWithSeeds.shuffle()
         methodsToFuzz = methodsWithSeeds.take(numberOfMethodToFuzz.toInt())
     }
 
-    val classOfMethodsToFuzz = constructClassOfMethods(methodsToFuzz, parsedTests)
-    val testToFuzz = classOfMethodsToFuzz.clone()
-    testToFuzz.removeTryCatchBlocks()
-    testToFuzz.removeAsserts()
+    try {
+        for (i in parsedTests.indices) {
+            val createdTestClassFile = File("$outputDirWithPackage/originalTest$i.java")
+            createdTestClassFile.createNewFile()
 
-    val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
-
-    var generatedValues: Map<String, List<String>> = mapOf()
-    var placesForNewValues: Map<MethodDeclaration, List<Expression>> = mapOf()
-    val testToConstruct = classOfMethodsToFuzz.clone()
-
-    if (placesToFuzz.isNotEmpty()) {
-        logger.debug("Chosen places to fuzz\n: $placesToFuzz")
-        generatedValues =
-            JQFZestFuzzer(outputDirWithPackage, cp, JQFDir).getValues(
-                className,
-                packageName,
-                testToFuzz,
-                placesToFuzz,
-                fuzzingBudgetPerMethod
-            )
-
-        testToConstruct.removeTryCatchBlocks()
-        placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
-    } else {
-        logger.debug("No places to fuzz were found")
+            createdTestClassFile.writeText(parsedTests[i].toString())
+        }
+    } catch (e: Exception) {
+        logger.error(e.stackTraceToString())
     }
 
-    TestCreator.createTest(
-        classOfAllMethods,
-        testToConstruct,
-        placesForNewValues,
-        generatedValues,
-        outputDirWithPackage,
-        packageName,
-        cp
-    )
+    for (i in 0..methodsToFuzz.size / FUZZING_METHODS_PER_FILE) {
+        lateinit var currentMethodsToFuzz: List<MethodDeclaration>
+        var lastIndexOfSlice: Int = 0
+
+        lastIndexOfSlice = if ((i + 1) * FUZZING_METHODS_PER_FILE < methodsToFuzz.size) {
+            (i + 1) * FUZZING_METHODS_PER_FILE - 1
+        } else {
+            methodsToFuzz.size - 1
+        }
+
+        currentMethodsToFuzz = methodsToFuzz.slice(i * FUZZING_METHODS_PER_FILE..lastIndexOfSlice)
+        val classOfMethodsToFuzz = constructClassOfMethods(currentMethodsToFuzz, parsedTests)
+        val testToFuzz = classOfMethodsToFuzz.clone()
+        testToFuzz.removeTryCatchBlocks()
+        testToFuzz.removeAsserts()
+
+        val placesToFuzz = SeedFinder.getSeeds(className, testToFuzz)
+
+        var generatedValues: Map<String, List<String>> = mapOf()
+        var placesForNewValues: Map<MethodDeclaration, List<Expression>> = mapOf()
+        val testToConstruct = classOfMethodsToFuzz.clone()
+
+        if (placesToFuzz.isNotEmpty()) {
+            logger.debug("Chosen places to fuzz\n: $placesToFuzz")
+            generatedValues =
+                JQFZestFuzzer(outputDirWithPackage, cp, JQFDir).getValues(
+                    className,
+                    packageName,
+                    testToFuzz,
+                    placesToFuzz,
+                    fuzzingBudgetPerMethod
+                )
+
+            testToConstruct.removeTryCatchBlocks()
+            placesForNewValues = SeedFinder.getSeeds(className, testToConstruct)
+        } else {
+            logger.debug("No places to fuzz were found")
+        }
+
+        TestCreator.createTest(
+            classOfAllMethods,
+            testToConstruct,
+            placesForNewValues,
+            generatedValues,
+            outputDirWithPackage,
+            packageName,
+            cp,
+            i
+        )
+    }
 }
 
 fun constructClassOfMethods(methods: List<MethodDeclaration>, originalTests: List<CompilationUnit>): CompilationUnit {
@@ -140,10 +165,10 @@ fun constructClassOfMethods(methods: List<MethodDeclaration>, originalTests: Lis
                     createdClass.addMember(member)
                 }
             }
+        }
 
-            classOrInterfaceDeclaration.walk(ImportDeclaration::class.java) {
-                cu.addImport(it)
-            }
+        compilationUnit.walk(ImportDeclaration::class.java) {
+            cu.addImport(it)
         }
     }
 
