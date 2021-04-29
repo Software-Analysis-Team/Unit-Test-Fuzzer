@@ -33,7 +33,6 @@ fun main(args: Array<String>) {
     val splitClassName = className.split(".")
     val simpleClassName = splitClassName.last()
 
-    // todo: set test package Name as argument
     var packageName: String? = null
     if (splitClassName.size > 1) {
         packageName = className.removeSuffix(".$simpleClassName")
@@ -49,7 +48,7 @@ fun main(args: Array<String>) {
 
     val totalBudget = timeBudget.toLong() - WRITING_BUDGET
     val externalInstrumentsBudget = totalBudget / 100.0 * EXTERNAL_INSTRUMENTS_PERCENTAGE
-    val generationBudget = 8 //externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
+    val generationBudget = 30 //externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
     val fuzzingBudget = externalInstrumentsBudget - generationBudget
 
     val generator: TestGenerator?
@@ -78,7 +77,7 @@ fun main(args: Array<String>) {
     val numberOfMethodToFuzz = fuzzingBudget / fuzzingBudgetPerMethod
     val methodsToFuzz: List<MethodDeclaration>
 
-    val classOfAllMethods = constructClassOfMethods(allMethods, parsedTests)
+    val classOfAllMethods = constructClassOfMethods(allMethods, parsedTests, generatorName)
     val allMethodsSeeds = SeedFinder.getSeeds(className, classOfAllMethods)
 
     val methodsWithSeeds = allMethodsSeeds.keys.toMutableList()
@@ -93,8 +92,13 @@ fun main(args: Array<String>) {
 
     try {
         for (i in parsedTests.indices) {
-            val createdTestClassFile = File("$outputDirWithPackage/originalTest$i.java")
+            val originalTestName = "OriginalTest$i"
+            val createdTestClassFile = File("$outputDirWithPackage/$originalTestName.java")
             createdTestClassFile.createNewFile()
+
+            parsedTests[i].walk(ClassOrInterfaceDeclaration::class.java) {
+                it.setName(originalTestName)
+            }
 
             createdTestClassFile.writeText(parsedTests[i].toString())
         }
@@ -104,16 +108,14 @@ fun main(args: Array<String>) {
 
     for (i in 0..methodsToFuzz.size / FUZZING_METHODS_PER_FILE) {
         lateinit var currentMethodsToFuzz: List<MethodDeclaration>
-        var lastIndexOfSlice: Int = 0
-
-        lastIndexOfSlice = if ((i + 1) * FUZZING_METHODS_PER_FILE < methodsToFuzz.size) {
+        val lastIndexOfSlice = if ((i + 1) * FUZZING_METHODS_PER_FILE < methodsToFuzz.size) {
             (i + 1) * FUZZING_METHODS_PER_FILE - 1
         } else {
             methodsToFuzz.size - 1
         }
 
         currentMethodsToFuzz = methodsToFuzz.slice(i * FUZZING_METHODS_PER_FILE..lastIndexOfSlice)
-        val classOfMethodsToFuzz = constructClassOfMethods(currentMethodsToFuzz, parsedTests)
+        val classOfMethodsToFuzz = constructClassOfMethods(currentMethodsToFuzz, parsedTests, generatorName)
         val testToFuzz = classOfMethodsToFuzz.clone()
         testToFuzz.removeTryCatchBlocks()
         testToFuzz.removeAsserts()
@@ -154,15 +156,21 @@ fun main(args: Array<String>) {
     }
 }
 
-fun constructClassOfMethods(methods: List<MethodDeclaration>, originalTests: List<CompilationUnit>): CompilationUnit {
+fun constructClassOfMethods(
+    methods: List<MethodDeclaration>,
+    originalTests: List<CompilationUnit>,
+    generatorName: String
+): CompilationUnit {
     val cu = CompilationUnit()
     val createdClass = cu.addClass("RegressionTests", Modifier.Keyword.PUBLIC)
 
     originalTests.forEach { compilationUnit ->
         compilationUnit.walk(ClassOrInterfaceDeclaration::class.java) { classOrInterfaceDeclaration ->
-            for (member in classOrInterfaceDeclaration.members) {
-                if (!member.isMethodDeclaration && !createdClass.members.contains(member)) {
-                    createdClass.addMember(member)
+            if (generatorName == "randoop") {
+                for (member in classOrInterfaceDeclaration.members) {
+                    if (!member.isMethodDeclaration && !createdClass.members.contains(member)) {
+                        createdClass.addMember(member)
+                    }
                 }
             }
         }
