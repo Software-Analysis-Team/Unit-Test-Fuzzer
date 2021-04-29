@@ -18,6 +18,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.ObjectInputStream
+import java.nio.charset.StandardCharsets.UTF_8
 
 class TestCreator {
     companion object {
@@ -212,7 +213,7 @@ class TestCreator {
 
             try {
                 val modifiedTest = CompilationUnit()
-                val modifiedTestClass = modifiedTest.addClass("modifiedTest$index", Modifier.Keyword.PUBLIC)
+                val modifiedTestClass = modifiedTest.addClass("ModifiedTest$index", Modifier.Keyword.PUBLIC)
 
                 if (packageName != null) {
                     modifiedTest.setPackageDeclaration(packageName)
@@ -229,7 +230,7 @@ class TestCreator {
 
                 logger.debug("New tests created\n: $listWithModifiedTests")
 
-                createdTestClassFile.writeText(modifiedTest.toString())
+                createdTestClassFile.writeText(modifiedTest.toString(), UTF_8)
             } catch (e: Exception) {
                 logger.error(e.stackTraceToString())
             }
