@@ -18,4 +18,13 @@
         <listener class="com.github.softwareAnalysisTeam.unitTestFuzzer.listeners.MyProjectManagerListener"
                   topic="com.intellij.openapi.project.ProjectManagerListener"/>
     </projectListeners>
+
+    <actions>
+        <action id="unitTestFuzzer.action.UTFAction"
+                class="com.github.softwareAnalysisTeam.unitTestFuzzer.action.UTFAction"
+                text="Run Randoop" description="Runs randoop">
+            <add-to-group group-id="GenerateGroup" anchor="last"/>
+        </action>
+    </actions>
+
 </idea-plugin>
