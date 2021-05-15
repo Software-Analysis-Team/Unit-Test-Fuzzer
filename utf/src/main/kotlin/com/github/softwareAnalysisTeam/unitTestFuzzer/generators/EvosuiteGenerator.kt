@@ -15,9 +15,8 @@ class EvosuiteGenerator(private val evoSuiteJarLocation: String, private val cp:
     ): List<String> {
         val tests: MutableList<String> = mutableListOf()
 
-        // todo: add package name
         val defaultCommand =
-            "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $cp -Dsearch_budget=$timeout"
+            "java -jar $evoSuiteJarLocation -class $testClassName -projectCP $cp -Dsearch_budget=${(timeout * 0.5).toInt()}"
 
         CommandExecutor.execute(defaultCommand, outputDir)
         val generatedTestsDir = Paths.get(outputDir, "evosuite-tests")
