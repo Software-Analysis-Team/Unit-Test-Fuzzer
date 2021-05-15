@@ -35,6 +35,26 @@ fun CompilationUnit.collectAsserts(): Map<String, List<MethodCallExpr>> {
     return map
 }
 
+fun MethodDeclaration.collectAsserts(): List<MethodCallExpr> {
+    val list = mutableListOf<MethodCallExpr>()
+
+    this.walk(MethodCallExpr::class.java) { methodCallExpr ->
+        if (isAssert(methodCallExpr)) {
+            list.add(methodCallExpr)
+        }
+    }
+
+    return list
+}
+
+fun MethodDeclaration.removeAsserts() {
+    this.walk(MethodCallExpr::class.java) { methodCallExpr ->
+        if (isAssert(methodCallExpr)) {
+            methodCallExpr.removeForced()
+        }
+    }
+}
+
 private fun isAssert(methodCallExpr: MethodCallExpr): Boolean {
     return methodCallExpr.nameAsString.contains("assertEquals")
             || methodCallExpr.toString().contains("org.junit.Assert.")

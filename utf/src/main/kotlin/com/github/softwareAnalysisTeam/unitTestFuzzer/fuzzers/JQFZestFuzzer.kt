@@ -13,6 +13,8 @@ import java.io.*
 import java.nio.file.Files
 import java.nio.file.Paths
 
+const val CLASS_FOR_ZEST_FUZZING_NAME = "ClassForFuzzing"
+const val CLASS_FOR_ZEST_SAVING_NAME = "ClassForSaving"
 
 class JQFZestFuzzer(private val outputDir: String, private var cp: String, private val JQFDir: String) : Fuzzer {
     private val commandToCompile: String
@@ -44,18 +46,13 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
         val commandToRun = "timeout ${budgetPerMethod}s ${Paths.get(JQFDir, "bin", "jqf-zest")} -c ${this.cp}"
 
-        val classForFuzzingName = "ClassForFuzzing"
-        val classForSavingName = "ClassForSaving"
-
-        val fileForFuzzing = File(outputDir + File.separator + "$classForFuzzingName.java")
+        val fileForFuzzing = File(outputDir + File.separator + "$CLASS_FOR_ZEST_FUZZING_NAME.java")
         fileForFuzzing.createNewFile()
-
-        val fileForSaving = File(outputDir + File.separator + "$classForSavingName.java")
-        fileForSaving.createNewFile()
-
-        val classForFuzzing = constructClassToFuzz(cu, seeds, classForFuzzingName, packageName)
+        val classForFuzzing = constructClassToFuzz(cu, seeds, packageName)
         fileForFuzzing.writeText(classForFuzzing.toString())
 
+        val fileForSaving = File(outputDir + File.separator + "$CLASS_FOR_ZEST_SAVING_NAME.java")
+        fileForSaving.createNewFile()
         val classForSaving = constructClassForSaving(classForFuzzing)
         fileForSaving.writeText(classForSaving.toString())
 
@@ -70,32 +67,24 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         val fuzzResultsPath = Paths.get(outputDir, "fuzz-results")
 
         val corpusFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "corpus")
-        val failureFuzzResultsPath = Paths.get(fuzzResultsPath.toString(), "failures")
         val packagePrefix = if (packageName != null) "$packageName." else ""
 
         try {
             seeds.keys.forEach { method ->
                 CommandExecutor.execute(
-                    "$commandToRun $packagePrefix$classForFuzzingName ${method.nameAsString}",
+                    "$commandToRun $packagePrefix$CLASS_FOR_ZEST_FUZZING_NAME ${method.nameAsString}",
                     outputDir
                 )
                 if (Files.exists(corpusFuzzResultsPath)) {
                     Files.walk(corpusFuzzResultsPath).forEach { path ->
                         if (Files.isRegularFile(path)) {
                             CommandExecutor.execute(
-                                "$commandToRepr $packagePrefix$classForSavingName ${method.nameAsString} $path",
+                                "$commandToRepr $packagePrefix$CLASS_FOR_ZEST_SAVING_NAME ${method.nameAsString} $path",
                                 outputDir, File("$fuzzResultsPath/logs")
                             )
                         }
                     }
                 }
-
-//                Files.walk(failureFuzzResultsPath).forEach { path ->
-//                    if (Files.isRegularFile(path)) {
-//                        CommandExecutor.execute("$commandToRepr $classForSavingName $methodName $path", outputDir)
-//                    }
-//                }
-
             }
         } catch (e: Exception) {
             logger.error(e.stackTraceToString())
@@ -104,9 +93,9 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
             fileForFuzzing.delete()
             fileForSaving.delete()
-            File(outputDir + File.separator + "$classForFuzzingName.class").delete()
-            File(outputDir + File.separator + "$classForSavingName.class").delete()
-            File(outputDir + File.separator + "$classForSavingName\$AppendingObjectOutputStream.class").delete()
+            File(outputDir + File.separator + "$CLASS_FOR_ZEST_FUZZING_NAME.class").delete()
+            File(outputDir + File.separator + "$CLASS_FOR_ZEST_SAVING_NAME.class").delete()
+            File(outputDir + File.separator + "$CLASS_FOR_ZEST_SAVING_NAME\$AppendingObjectOutputStream.class").delete()
         }
 
         val valuesForEachTest = mutableMapOf<String, List<String>>()
@@ -127,7 +116,6 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
                         listOfValues.add(objectInputStream.readObject().toString())
                     }
                 } catch (e: EOFException) {
-                    // todo: find a better way to stop reading from file
                 } catch (e: Exception) {
                     logger.error(e.stackTraceToString())
                 } finally {
@@ -146,7 +134,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
     private fun constructClassForSaving(classForFuzzing: CompilationUnit): CompilationUnit {
         val classForSaving = classForFuzzing.clone()
         classForSaving.walk(ClassOrInterfaceDeclaration::class.java) {
-            if (it.nameAsString == "ClassForFuzzing") it.setName("ClassForSaving")
+            if (it.nameAsString == CLASS_FOR_ZEST_FUZZING_NAME) it.setName(CLASS_FOR_ZEST_SAVING_NAME)
         }
 
         classForSaving.walk(MethodDeclaration::class.java) { testMethodDeclaration ->
@@ -179,7 +167,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
             parameter.type = ClassOrInterfaceType("Exception")
             catchClause.parameter = parameter
             val catchStmt = BlockStmt()
-            catchStmt.addStatement(StaticJavaParser.parseStatement("System.out.println(\"Exception\");"))
+            catchStmt.addStatement(StaticJavaParser.parseStatement("System.out.println(e);"))
             catchClause.body = catchStmt
             val stmts: NodeList<CatchClause> = NodeList()
             stmts.add(catchClause)
@@ -191,7 +179,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
         }
 
         classForSaving.walk(ClassOrInterfaceDeclaration::class.java) {
-            if (it.nameAsString == "ClassForSaving") {
+            if (it.nameAsString == CLASS_FOR_ZEST_SAVING_NAME) {
                 it.addInnerAppendingOutStreamClass()
             }
         }
@@ -202,7 +190,6 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
     private fun constructClassToFuzz(
         cu: CompilationUnit,
         seeds: Map<MethodDeclaration, List<Expression>>,
-        className: String,
         packageName: String?
     ): CompilationUnit {
         val fileToFuzz = CompilationUnit()
@@ -213,7 +200,7 @@ class JQFZestFuzzer(private val outputDir: String, private var cp: String, priva
 
         addImports(fileToFuzz)
 
-        val classToFuzz = fileToFuzz.addClass(className, Modifier.Keyword.PUBLIC)
+        val classToFuzz = fileToFuzz.addClass(CLASS_FOR_ZEST_FUZZING_NAME, Modifier.Keyword.PUBLIC)
         val classAnnotation = SingleMemberAnnotationExpr().setMemberValue(NameExpr("JQF.class")).setName("RunWith")
         classToFuzz.addAnnotation(classAnnotation)
 
