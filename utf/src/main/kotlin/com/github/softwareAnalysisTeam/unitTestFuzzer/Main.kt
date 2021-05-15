@@ -7,6 +7,7 @@ import com.github.javaparser.ast.Modifier
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.expr.Expression
+import com.github.javaparser.ast.stmt.IfStmt
 import com.github.softwareAnalysisTeam.unitTestFuzzer.fuzzers.JQFZestFuzzer
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.EvosuiteGenerator
 import com.github.softwareAnalysisTeam.unitTestFuzzer.generators.RandoopGenerator
@@ -16,10 +17,14 @@ import java.io.File
 import java.lang.Exception
 
 val logger: Logger = KotlinLogging.logger {}
+
 const val WRITING_BUDGET = 2
-const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 70
+const val EXTERNAL_INSTRUMENTS_PERCENTAGE = 60
 const val GENERATION_PERCENTAGE = 10
 const val FUZZING_METHODS_PER_FILE = 20
+
+const val EVOSUITE_NAME = "evosuite"
+const val RANDOOP_NAME = "randoop"
 
 fun main(args: Array<String>) {
     val className = args[0]
@@ -48,13 +53,13 @@ fun main(args: Array<String>) {
 
     val totalBudget = timeBudget.toLong() - WRITING_BUDGET
     val externalInstrumentsBudget = totalBudget / 100.0 * EXTERNAL_INSTRUMENTS_PERCENTAGE
-    val generationBudget = 30 //externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
+    val generationBudget = externalInstrumentsBudget / 100 * GENERATION_PERCENTAGE
     val fuzzingBudget = externalInstrumentsBudget - generationBudget
 
     val generator: TestGenerator?
     generator = when (generatorName) {
-        "randoop" -> RandoopGenerator("$cp:$generatorJar")
-        "evosuite" -> EvosuiteGenerator(generatorJar, cp)
+        RANDOOP_NAME -> RandoopGenerator("$cp:$generatorJar")
+        EVOSUITE_NAME -> EvosuiteGenerator(generatorJar, cp)
         else -> throw Exception("Unknown generator $generatorName")
     }
 
@@ -68,8 +73,19 @@ fun main(args: Array<String>) {
         val parsedTest = StaticJavaParser.parse(tests[i])
         parsedTests.add(parsedTest)
 
-        parsedTest.walk(MethodDeclaration::class.java) {
-            allMethods.add(it.setName("${it.name}ofFile$i"))
+        if (generatorName != EVOSUITE_NAME || generatorName == EVOSUITE_NAME && !parsedTests[i].getClassByName("${simpleClassName}_ESTest_scaffolding").isPresent) {
+            parsedTest.walk(MethodDeclaration::class.java) { methodDecl ->
+
+                if (generatorName == RANDOOP_NAME) {
+                    methodDecl.walk(IfStmt::class.java) {
+                        if (it.condition.toString() == "debug") {
+                            it.removeForced()
+                        }
+                    }
+                }
+
+                allMethods.add(methodDecl.setName("${methodDecl.name}ofFile$i"))
+            }
         }
     }
 
@@ -92,15 +108,17 @@ fun main(args: Array<String>) {
 
     try {
         for (i in parsedTests.indices) {
-            val originalTestName = "OriginalTest$i"
-            val createdTestClassFile = File("$outputDirWithPackage/$originalTestName.java")
-            createdTestClassFile.createNewFile()
-
-            parsedTests[i].walk(ClassOrInterfaceDeclaration::class.java) {
-                it.setName(originalTestName)
+            if (generatorName != EVOSUITE_NAME || generatorName == EVOSUITE_NAME && !parsedTests[i].getClassByName("${simpleClassName}_ESTest_scaffolding").isPresent) {
+                parsedTests[i].walk(ClassOrInterfaceDeclaration::class.java) {
+                    val createdTestClassFile = File("$outputDirWithPackage/${it.nameAsString}.java")
+                    createdTestClassFile.createNewFile()
+                    createdTestClassFile.writeText(parsedTests[i].toString())
+                }
+            } else {
+                val createdTestClassFile = File("$outputDirWithPackage/${simpleClassName}_ESTest_scaffolding.java")
+                createdTestClassFile.createNewFile()
+                createdTestClassFile.writeText(parsedTests[i].toString())
             }
-
-            createdTestClassFile.writeText(parsedTests[i].toString())
         }
     } catch (e: Exception) {
         logger.error(e.stackTraceToString())
@@ -166,7 +184,7 @@ fun constructClassOfMethods(
 
     originalTests.forEach { compilationUnit ->
         compilationUnit.walk(ClassOrInterfaceDeclaration::class.java) { classOrInterfaceDeclaration ->
-            if (generatorName == "randoop") {
+            if (generatorName == RANDOOP_NAME) {
                 for (member in classOrInterfaceDeclaration.members) {
                     if (!member.isMethodDeclaration && !createdClass.members.contains(member)) {
                         createdClass.addMember(member)
