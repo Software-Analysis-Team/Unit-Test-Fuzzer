@@ -94,10 +94,29 @@ public class EvosuiteTool implements ITestingTool {
         StringBuffer cmdLine = new StringBuffer();
 
         String javaCommand = buildJavaCommand();
-        cmdLine.append(String.format("%s -jar %s -class %s -projectCP %s -Dsearch_budget=%s -Dtest_dir=%s ", javaCommand, evosuiteJarFilename, cName, classPath, Math.round(timeBudget * 0.5), junitOutputDirName));
+      
+        cmdLine.append(String.format("%s -jar %s -class %s -projectCP %s -Dsearch_budget=%s -Dtest_dir=%s ", javaCommand, evosuiteJarFilename, cName, classPath, timeBudget, junitOutputDirName));
 
         final String regressionTestFileName;
-        regressionTestFileName = String.join(File.separator, junitOutputDirName, "RegressionTest.java");
+        //todo: fix packages
+//        if (junitPackageName != null) {
+//            cmdLine.append(String.format("--junit-package-name=%s ", junitPackageName));
+//
+//            regressionTestFileName = String.join(File.separator, junitOutputDirName,
+//                    junitPackageName.replace(".", File.separator), "RegressionTest.java");
+//        } else {
+            regressionTestFileName = String.join(File.separator, junitOutputDirName, "RegressionTest.java");
+//        }
+//
+//        cmdLine.append("--clear=10000 ");
+//        cmdLine.append("--string-maxlen=5000 ");
+//        cmdLine.append("--forbid-null=false ");
+//        cmdLine.append("--null-ratio=0.1 ");
+//        cmdLine.append("--no-error-revealing-tests=true ");
+//        cmdLine.append("--omitmethods=random ");
+//        cmdLine.append("--silently-ignore-bad-class-names=true ");
+//        cmdLine.append("--testsperfile=100 ");
+//        cmdLine.append("--ignore-flaky-tests=true ");
 
         String cmdToExecute = cmdLine.toString();
 
