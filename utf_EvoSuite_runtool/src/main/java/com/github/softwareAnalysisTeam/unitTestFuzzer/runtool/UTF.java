@@ -8,12 +8,17 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class EvosuiteTool implements ITestingTool {
+public class UTF implements ITestingTool {
 
     private PrintStream logOut = null;
+    private String generationTool;
+    private String jqfDir;
 
-    public EvosuiteTool() {
+
+    public UTF(String generationTool, String jqfDir) {
         super();
+        this.generationTool = generationTool;
+        this.jqfDir = jqfDir;
     }
 
     private boolean useClassList = true;
@@ -48,7 +53,7 @@ public class EvosuiteTool implements ITestingTool {
         }
 
         if (logOut == null) {
-            final String logUtfFileName = String.join(File.separator, tempDirName, "log_evosuite.txt");
+            final String logUtfFileName = String.join(File.separator, tempDirName, "log_utf_evosuite.txt");
             PrintStream outStream;
             try {
                 outStream = new PrintStream(new FileOutputStream(logUtfFileName, true));
@@ -66,13 +71,13 @@ public class EvosuiteTool implements ITestingTool {
 
         log("Execution of tool UTF STARTED");
         log("user.home=" + homeDirName);
-        // todo: change jar name
-        final String evosuiteJarFilename = String.join(File.separator, homeDirName, "lib", "evosuite-1.1.0.jar");
+        final String utfJarFilename = String.join(File.separator, homeDirName, "lib", "utf-all-1.0-SNAPSHOT.jar");
 
-        File utfJarFile = new File(evosuiteJarFilename);
+
+        File utfJarFile = new File(utfJarFilename);
         if (!utfJarFile.exists()) {
-            throw new RuntimeException("File evosuite.jar was not found at folder "
-                    + String.join(File.separator, homeDirName, "evosuite", "dist"));
+            throw new RuntimeException("File utf.jar was not found at folder "
+                    + String.join(File.separator, homeDirName, "utf", "dist"));
         }
 
         final String junitOutputDirName = String.join(File.separator, homeDirName, "temp", "testcases");
@@ -82,31 +87,39 @@ public class EvosuiteTool implements ITestingTool {
             junitOutputDir.mkdirs();
         }
 
+        final String testClass = cName;
+        final long timeLimit = timeBudget;
+
         final String junitPackageName;
-        if (!cName.contains(".")) {
+        if (!testClass.contains(".")) {
             junitPackageName = null;
         } else {
-            final int lastIndexOfDot = cName.lastIndexOf(".");
-            junitPackageName = cName.substring(0, lastIndexOfDot);
+            final int lastIndexOfDot = testClass.lastIndexOf(".");
+            junitPackageName = testClass.substring(0, lastIndexOfDot);
         }
 
         final String classPath = createClassPath(binFile, classPathList, utfJarFile);
         StringBuffer cmdLine = new StringBuffer();
 
         String javaCommand = buildJavaCommand();
-      
-        cmdLine.append(String.format("%s -jar %s -class %s -projectCP %s -Dsearch_budget=%s -Dtest_dir=%s ", javaCommand, evosuiteJarFilename, cName, classPath, timeBudget, junitOutputDirName));
+        cmdLine.append(String.format("%s -cp %s:%s com.github.softwareAnalysisTeam.unitTestFuzzer.MainKt ", javaCommand, classPath, utfJarFilename));
+        cmdLine.append(String.format("%s ", testClass));
+        cmdLine.append(String.format("%s ", timeLimit));
+        cmdLine.append(String.format("%s ", junitOutputDirName));
+        cmdLine.append(String.format("%s ", classPath));
+        cmdLine.append(String.format("%s ", "evosuite"));
+        cmdLine.append(String.format("%s ", homeDirName + "/" + generationTool));
+        cmdLine.append(String.format("%s ", homeDirName + "/" + jqfDir));
 
         final String regressionTestFileName;
-        //todo: fix packages
-//        if (junitPackageName != null) {
-//            cmdLine.append(String.format("--junit-package-name=%s ", junitPackageName));
-//
-//            regressionTestFileName = String.join(File.separator, junitOutputDirName,
-//                    junitPackageName.replace(".", File.separator), "RegressionTest.java");
-//        } else {
+        if (junitPackageName != null) {
+            cmdLine.append(String.format("--junit-package-name=%s ", junitPackageName));
+
+            regressionTestFileName = String.join(File.separator, junitOutputDirName,
+                    junitPackageName.replace(".", File.separator), "RegressionTest.java");
+        } else {
             regressionTestFileName = String.join(File.separator, junitOutputDirName, "RegressionTest.java");
-//        }
+        }
 //
 //        cmdLine.append("--clear=10000 ");
 //        cmdLine.append("--string-maxlen=5000 ");
@@ -198,5 +211,4 @@ public class EvosuiteTool implements ITestingTool {
     public Integer getLatestRandoopRetVale() {
         return latestRandoopRetVal;
     }
-
 }

@@ -5,14 +5,14 @@ import org.apache.commons.exec.DefaultExecutor;
 import org.apache.commons.exec.PumpStreamHandler;
 
 import java.io.*;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 
-public class EvosuiteTool implements ITestingTool {
+public class RandoopTool implements ITestingTool {
 
     private PrintStream logOut = null;
 
-    public EvosuiteTool() {
+    public RandoopTool() {
         super();
     }
 
@@ -48,14 +48,14 @@ public class EvosuiteTool implements ITestingTool {
         }
 
         if (logOut == null) {
-            final String logUtfFileName = String.join(File.separator, tempDirName, "log_evosuite.txt");
+            final String logRandoopFileName = String.join(File.separator, tempDirName, "log_randoop.txt");
             PrintStream outStream;
             try {
-                outStream = new PrintStream(new FileOutputStream(logUtfFileName, true));
+                outStream = new PrintStream(new FileOutputStream(logRandoopFileName, true));
                 this.setLoggingPrintWriter(outStream);
             } catch (FileNotFoundException e) {
                 throw new RuntimeException(
-                        "FileNotFoundException signaled while creating output stream for  " + logUtfFileName);
+                        "FileNotFoundException signaled while creating output stream for  " + logRandoopFileName);
             }
         }
 
@@ -64,15 +64,14 @@ public class EvosuiteTool implements ITestingTool {
             throw new RuntimeException("JAVA_HOME must be configured in order to run this program");
         }
 
-        log("Execution of tool UTF STARTED");
+        log("Execution of tool Randoop STARTED");
         log("user.home=" + homeDirName);
-        // todo: change jar name
-        final String evosuiteJarFilename = String.join(File.separator, homeDirName, "lib", "evosuite-1.1.0.jar");
+        final String randoopJarFilename = String.join(File.separator, homeDirName, "lib", "randoop.jar");
 
-        File utfJarFile = new File(evosuiteJarFilename);
-        if (!utfJarFile.exists()) {
-            throw new RuntimeException("File evosuite.jar was not found at folder "
-                    + String.join(File.separator, homeDirName, "evosuite", "dist"));
+        File randoopJarFile = new File(randoopJarFilename);
+        if (!randoopJarFile.exists()) {
+            throw new RuntimeException("File randoop.jar was not found at folder "
+                    + String.join(File.separator, homeDirName, "randoop", "dist"));
         }
 
         final String junitOutputDirName = String.join(File.separator, homeDirName, "temp", "testcases");
@@ -82,32 +81,36 @@ public class EvosuiteTool implements ITestingTool {
             junitOutputDir.mkdirs();
         }
 
+        final String testClass = cName;
+        final long timeLimit = timeBudget;
+
         final String junitPackageName;
-        if (!cName.contains(".")) {
+        if (!testClass.contains(".")) {
             junitPackageName = null;
         } else {
-            final int lastIndexOfDot = cName.lastIndexOf(".");
-            junitPackageName = cName.substring(0, lastIndexOfDot);
+            final int lastIndexOfDot = testClass.lastIndexOf(".");
+            junitPackageName = testClass.substring(0, lastIndexOfDot);
         }
 
-        final String classPath = createClassPath(binFile, classPathList, utfJarFile);
+        final String classPath = createClassPath(binFile, classPathList, randoopJarFile);
         StringBuffer cmdLine = new StringBuffer();
 
         String javaCommand = buildJavaCommand();
-      
-        cmdLine.append(String.format("%s -jar %s -class %s -projectCP %s -Dsearch_budget=%s -Dtest_dir=%s ", javaCommand, evosuiteJarFilename, cName, classPath, timeBudget, junitOutputDirName));
+        cmdLine.append(String.format("%s -cp %s randoop.main.Main gentests ", javaCommand, classPath));
+        cmdLine.append(String.format("--testclass=%s ", testClass));
+        cmdLine.append(String.format("--time-limit=%s ", timeLimit));
+        cmdLine.append(String.format("--junit-output-dir=%s ", junitOutputDirName));
 
         final String regressionTestFileName;
-        //todo: fix packages
-//        if (junitPackageName != null) {
-//            cmdLine.append(String.format("--junit-package-name=%s ", junitPackageName));
-//
-//            regressionTestFileName = String.join(File.separator, junitOutputDirName,
-//                    junitPackageName.replace(".", File.separator), "RegressionTest.java");
-//        } else {
+        if (junitPackageName != null) {
+            cmdLine.append(String.format("--junit-package-name=%s ", junitPackageName));
+
+            regressionTestFileName = String.join(File.separator, junitOutputDirName,
+                    junitPackageName.replace(".", File.separator), "RegressionTest.java");
+        } else {
             regressionTestFileName = String.join(File.separator, junitOutputDirName, "RegressionTest.java");
-//        }
-//
+        }
+
 //        cmdLine.append("--clear=10000 ");
 //        cmdLine.append("--string-maxlen=5000 ");
 //        cmdLine.append("--forbid-null=false ");
@@ -122,7 +125,7 @@ public class EvosuiteTool implements ITestingTool {
 
         File homeDir = new File(homeDirName);
         int retVal = launch(homeDir, cmdToExecute);
-        log("UTF execution finished with exit code " + retVal);
+        log("Randoop execution finished with exit code " + retVal);
         this.setLatestRandoopRetVal(retVal);
 
         File regressionTestFile = new File(regressionTestFileName);
@@ -134,7 +137,7 @@ public class EvosuiteTool implements ITestingTool {
                     + " could not be deleted since it does not exist");
         }
 
-        log("Execution of tool UTF FINISHED");
+        log("Execution of tool Randoop FINISHED");
     }
 
     private void setLatestRandoopRetVal(int retVal) {
@@ -188,7 +191,7 @@ public class EvosuiteTool implements ITestingTool {
             log("Execution of subprocess finished with ret_code " + exitValue);
             return exitValue;
         } catch (IOException e) {
-            log("An IOException occurred during the execution of UTF");
+            log("An IOException occurred during the execution of Randoop");
             return -1;
         }
     }
